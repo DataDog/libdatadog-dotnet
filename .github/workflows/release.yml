@@ -11,10 +11,18 @@ on:
         required: true
         default: 'v25.0.0'
 
+# Default permissions for all jobs (least privilege principle)
+# Individual jobs can override these as needed
+permissions:
+  contents: read
+
 jobs:
   build-windows-x64:
     name: Build Windows x64
     runs-on: windows-latest
+    # This job only needs to read the repository code
+    permissions:
+      contents: read
     
     steps:
       - name: Checkout code
@@ -105,6 +113,7 @@ jobs:
     name: Create GitHub Release
     needs: build-windows-x64
     runs-on: ubuntu-latest
+    # This job needs to create releases (write access)
     permissions:
       contents: write
     
