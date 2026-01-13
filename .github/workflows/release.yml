@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      libdatadog_version:
+        description: 'Libdatadog version to build (e.g., v25.0.0)'
+        required: true
+        default: 'v25.0.0'
+
+jobs:
+  build-windows-x64:
+    name: Build Windows x64
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      
+      - name: Install cargo tools
+        run: |
+          rustup component add rustfmt
+          rustup component add clippy
+      
+      - name: Determine libdatadog version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $version = "${{ github.event.inputs.libdatadog_version }}"
+          } else {
+            # Extract version from tag, or default to v25.0.0
+            $version = "${{ github.ref_name }}"
+            if (-not $version.StartsWith("v")) {
+              $version = "v25.0.0"
+            }
+          }
+          echo "LIBDATADOG_VERSION=$version" >> $env:GITHUB_OUTPUT
+          echo "Building libdatadog version: $version"
+      
+      - name: Build Windows x64
+        shell: pwsh
+        run: |
+          ./build.ps1 -LibdatadogVersion "${{ steps.version.outputs.LIBDATADOG_VERSION }}" -Platform "x64-windows" -Clean
+      
+      - name: Calculate SHA512
+        id: hash
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash -Path "output/libdatadog-x64-windows.zip" -Algorithm SHA512).Hash.ToLower()
+          echo "SHA512_X64=$hash" >> $env:GITHUB_OUTPUT
+          echo "x64 SHA512: $hash"
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: libdatadog-x64-windows
+          path: output/libdatadog-x64-windows.zip
+          if-no-files-found: error
+      
+      - name: Create release notes
+        shell: pwsh
+        run: |
+          $notes = @"
+          # libdatadog-dotnet Release ${{ github.ref_name }}
+
+          Custom libdatadog binaries for dd-trace-dotnet.
+
+          ## Components
+          
+          - **libdatadog version**: ${{ steps.version.outputs.LIBDATADOG_VERSION }}
+          - **datadog-profiling-ffi**: Profiling FFI library
+          
+          ## Artifacts
+          
+          - \`libdatadog-x64-windows.zip\` - Windows x64 binaries (SHA512: ${{ steps.hash.outputs.SHA512_X64 }})
+          
+          ## Usage
+          
+          Update your vcpkg portfile to reference this release:
+          
+          \`\`\`cmake
+          set(LIBDATADOG_VERSION ${{ github.ref_name }})
+          set(LIBDATADOG_URL "https://github.com/DataDog/libdatadog-dotnet/releases/download/${{ github.ref_name }}/libdatadog-x64-windows.zip")
+          set(LIBDATADOG_HASH "${{ steps.hash.outputs.SHA512_X64 }}")
+          \`\`\`
+          "@
+          $notes | Out-File -FilePath release-notes.md -Encoding utf8
+      
+      - name: Upload release notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
+
+  create-release:
+    name: Create GitHub Release
+    needs: build-windows-x64
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Display structure
+        run: ls -R artifacts/
+      
+      - name: Read release notes
+        id: notes
+        run: |
+          if [ -f artifacts/release-notes/release-notes.md ]; then
+            echo "NOTES_FILE=artifacts/release-notes/release-notes.md" >> $GITHUB_OUTPUT
+          else
+            echo "No release notes found, will use default"
+            echo "NOTES_FILE=" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/libdatadog-x64-windows/libdatadog-x64-windows.zip
+          body_path: ${{ steps.notes.outputs.NOTES_FILE }}
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
