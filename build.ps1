@@ -202,7 +202,15 @@ Copy-Item "libdatadog/NOTICE" -Destination "$PackageDir/" -ErrorAction SilentlyC
 Write-Host "Creating zip archive..." -ForegroundColor Yellow
 $ZipPath = Join-Path $OutputDir "libdatadog-$Platform.zip"
 if (Test-Path $ZipPath) { Remove-Item $ZipPath }
-Compress-Archive -Path $PackageDir -DestinationPath $ZipPath -CompressionLevel Optimal
+
+# Compress the contents at root level (without the parent libdatadog-x64-windows folder)
+# This creates: libdatadog-x64-windows.zip containing include/, release/, debug/, etc. at root
+Push-Location $PackageDir
+try {
+    Compress-Archive -Path * -DestinationPath $ZipPath -CompressionLevel Optimal
+} finally {
+    Pop-Location
+}
 
 Write-Host "Build complete!" -ForegroundColor Green
 Write-Host "  Package: $ZipPath" -ForegroundColor Gray
