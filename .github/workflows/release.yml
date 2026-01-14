@@ -63,6 +63,16 @@ jobs:
           LIBDATADOG_VERSION: ${{ steps.version.outputs.LIBDATADOG_VERSION }}
         run: |
           ./build.ps1 -LibdatadogVersion $env:LIBDATADOG_VERSION -Platform "x64-windows" -Clean
+
+          # Debug: Check the zip structure
+          Write-Host "`n=== Verifying zip structure ===" -ForegroundColor Cyan
+          if (Test-Path "output/libdatadog-x64-windows.zip") {
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            $zip = [System.IO.Compression.ZipFile]::OpenRead("output/libdatadog-x64-windows.zip")
+            Write-Host "Root entries in zip:" -ForegroundColor Yellow
+            $zip.Entries | Select-Object -First 20 FullName | ForEach-Object { Write-Host "  $($_.FullName)" }
+            $zip.Dispose()
+          }
       
       - name: Calculate SHA512
         id: hash
@@ -134,7 +144,14 @@ jobs:
           path: artifacts
       
       - name: Display structure
-        run: ls -R artifacts/
+        run: |
+          echo "=== Artifact directory structure ==="
+          ls -R artifacts/
+          echo ""
+          echo "=== Checking if zip is nested ==="
+          if [ -f artifacts/libdatadog-x64-windows/libdatadog-x64-windows.zip ]; then
+            unzip -l artifacts/libdatadog-x64-windows/libdatadog-x64-windows.zip | head -20
+          fi
       
       - name: Read release notes
         id: notes

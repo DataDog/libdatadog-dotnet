@@ -62,6 +62,11 @@ Write-Host "Building libdatadog profiling FFI..." -ForegroundColor Yellow
 Push-Location libdatadog
 
 # Build release version
+# Note: The Cargo.toml already has optimized release profile:
+#   - opt-level = "s" (optimize for size)
+#   - lto = true (link-time optimization)
+#   - codegen-units = 1 (better optimization)
+#   - debug = "line-tables-only" (minimal debug info)
 Write-Host "  Building release configuration..." -ForegroundColor Gray
 cargo build --release -p libdd-profiling-ffi
 if ($LASTEXITCODE -ne 0) {
@@ -70,7 +75,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Build debug version  
+# Build debug version
 Write-Host "  Building debug configuration..." -ForegroundColor Gray
 cargo build -p libdd-profiling-ffi
 if ($LASTEXITCODE -ne 0) {
@@ -205,12 +210,31 @@ if (Test-Path $ZipPath) { Remove-Item $ZipPath }
 
 # Compress the contents at root level (without the parent libdatadog-x64-windows folder)
 # This creates: libdatadog-x64-windows.zip containing include/, release/, debug/, etc. at root
+# Use Get-ChildItem instead of wildcard to ensure consistent behavior across environments
+$itemsToCompress = Get-ChildItem -Path $PackageDir -Force | ForEach-Object { $_.FullName }
+
+if ($itemsToCompress.Count -eq 0) {
+    Write-Host "Error: No items found in $PackageDir to compress" -ForegroundColor Red
+    exit 1
+}
+
+# Compress from within the package directory to get flat structure
 Push-Location $PackageDir
 try {
-    Compress-Archive -Path * -DestinationPath $ZipPath -CompressionLevel Optimal
+    $relativePaths = Get-ChildItem -Path . -Force | ForEach-Object { $_.Name }
+    Write-Host "  Items to compress: $($relativePaths -join ', ')" -ForegroundColor Gray
+    Compress-Archive -Path $relativePaths -DestinationPath $ZipPath -CompressionLevel Optimal
 } finally {
     Pop-Location
 }
+
+# Verify zip contents
+Write-Host "  Verifying zip structure..." -ForegroundColor Gray
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$zip = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
+$rootEntries = $zip.Entries | Select-Object -First 10 | ForEach-Object { $_.FullName }
+Write-Host "  First 10 entries in zip: $($rootEntries -join ', ')" -ForegroundColor Gray
+$zip.Dispose()
 
 Write-Host "Build complete!" -ForegroundColor Green
 Write-Host "  Package: $ZipPath" -ForegroundColor Gray
