@@ -1,0 +1,9 @@
+# Code owners for libdatadog-dotnet
+# 
+# This repository is maintained by the APM .NET team.
+# All changes require review from @DataDog/apm-dotnet
+#
+# See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+* @DataDog/apm-dotnet
