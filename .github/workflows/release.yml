@@ -12,7 +12,6 @@ on:
         default: 'v25.0.0'
 
 # Default permissions for all jobs (least privilege principle)
-# Individual jobs can override these as needed
 permissions:
   contents: read
 
@@ -20,7 +19,6 @@ jobs:
   build-windows-x64:
     name: Build Windows x64
     runs-on: windows-latest
-    # This job only needs to read the repository code
     permissions:
       contents: read
     
@@ -29,14 +27,16 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
-        with:
-          toolchain: stable
-      
-      - name: Install cargo tools
         run: |
-          rustup component add rustfmt
-          rustup component add clippy
+          # Install Rust using rustup (built into Windows runners)
+          rustup update stable
+          rustup default stable
+          rustup component add rustfmt clippy
+      
+      - name: Verify Rust installation
+        run: |
+          rustc --version
+          cargo --version
       
       - name: Determine libdatadog version
         id: version
@@ -49,13 +49,11 @@ jobs:
           if ($env:EVENT_NAME -eq "workflow_dispatch") {
             $version = $env:INPUT_VERSION
           } else {
-            # Extract version from tag, or default to v25.0.0
             $version = $env:REF_NAME
             if (-not $version.StartsWith("v")) {
               $version = "v25.0.0"
             }
           }
-          # Use GITHUB_OUTPUT to safely pass the version
           "LIBDATADOG_VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           Write-Host "Building libdatadog version: $version"
       
@@ -124,7 +122,6 @@ jobs:
     name: Create GitHub Release
     needs: build-windows-x64
     runs-on: ubuntu-latest
-    # This job needs to create releases (write access)
     permissions:
       contents: write
     
@@ -148,13 +145,51 @@ jobs:
           fi
       
       - name: Create Release
-        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
-        with:
-          files: |
-            artifacts/libdatadog-x64-windows/libdatadog-x64-windows.zip
-          body_path: ${{ steps.notes.outputs.NOTES_FILE }}
-          draft: false
-          prerelease: false
-          fail_on_unmatched_files: true
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Read release notes
+            let body = 'Release artifacts for libdatadog-dotnet';
+            const notesFile = '${{ steps.notes.outputs.NOTES_FILE }}';
+            if (notesFile && fs.existsSync(notesFile)) {
+              body = fs.readFileSync(notesFile, 'utf8');
+            }
+            
+            // Create release
+            const release = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: process.env.RELEASE_TAG,
+              name: process.env.RELEASE_TAG,
+              body: body,
+              draft: false,
+              prerelease: false
+            });
+            
+            console.log(`Created release: ${release.data.html_url}`);
+            
+            // Upload artifact
+            const artifactPath = 'artifacts/libdatadog-x64-windows/libdatadog-x64-windows.zip';
+            const artifactName = 'libdatadog-x64-windows.zip';
+            
+            if (fs.existsSync(artifactPath)) {
+              const stats = fs.statSync(artifactPath);
+              console.log(`Uploading ${artifactName} (${stats.size} bytes)`);
+              
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.data.id,
+                name: artifactName,
+                data: fs.readFileSync(artifactPath)
+              });
+              
+              console.log(`Uploaded ${artifactName}`);
+            } else {
+              throw new Error(`Artifact not found: ${artifactPath}`);
+            }
