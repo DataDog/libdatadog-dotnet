@@ -101,7 +101,9 @@ New-Item -ItemType Directory -Force -Path $PackageDir | Out-Null
 $Dirs = @(
     "include",
     "release/dynamic",
-    "debug/dynamic"
+    "release/static",
+    "debug/dynamic",
+    "debug/static"
 )
 foreach ($Dir in $Dirs) {
     New-Item -ItemType Directory -Force -Path (Join-Path $PackageDir $Dir) | Out-Null
@@ -109,20 +111,44 @@ foreach ($Dir in $Dirs) {
 
 # Copy release artifacts
 Write-Host "  Copying release artifacts..." -ForegroundColor Gray
+
+# Dynamic build (DLL + import library)
 Copy-Item "$ReleaseDir/datadog_profiling_ffi.dll" -Destination "$PackageDir/release/dynamic/" -ErrorAction Stop
 Copy-Item "$ReleaseDir/datadog_profiling_ffi.pdb" -Destination "$PackageDir/release/dynamic/" -ErrorAction SilentlyContinue
-Copy-Item "$ReleaseDir/datadog_profiling_ffi.lib" -Destination "$PackageDir/release/dynamic/" -ErrorAction SilentlyContinue
-if (-not (Test-Path "$PackageDir/release/dynamic/datadog_profiling_ffi.lib")) {
-    Write-Host "  Warning: Release .lib file not found" -ForegroundColor Yellow
+
+# Copy import library (.dll.lib) and rename to .lib for dynamic linking
+if (Test-Path "$ReleaseDir/datadog_profiling_ffi.dll.lib") {
+    Copy-Item "$ReleaseDir/datadog_profiling_ffi.dll.lib" -Destination "$PackageDir/release/dynamic/datadog_profiling_ffi.lib" -ErrorAction Stop
+} else {
+    Write-Host "  Warning: Release import library (.dll.lib) not found" -ForegroundColor Yellow
+}
+
+# Static build (static library only)
+if (Test-Path "$ReleaseDir/datadog_profiling_ffi.lib") {
+    Copy-Item "$ReleaseDir/datadog_profiling_ffi.lib" -Destination "$PackageDir/release/static/" -ErrorAction Stop
+} else {
+    Write-Host "  Warning: Release static library (.lib) not found" -ForegroundColor Yellow
 }
 
 # Copy debug artifacts
 Write-Host "  Copying debug artifacts..." -ForegroundColor Gray
+
+# Dynamic build (DLL + import library)
 Copy-Item "$DebugDir/datadog_profiling_ffi.dll" -Destination "$PackageDir/debug/dynamic/" -ErrorAction Stop
 Copy-Item "$DebugDir/datadog_profiling_ffi.pdb" -Destination "$PackageDir/debug/dynamic/" -ErrorAction SilentlyContinue
-Copy-Item "$DebugDir/datadog_profiling_ffi.lib" -Destination "$PackageDir/debug/dynamic/" -ErrorAction SilentlyContinue
-if (-not (Test-Path "$PackageDir/debug/dynamic/datadog_profiling_ffi.lib")) {
-    Write-Host "  Warning: Debug .lib file not found" -ForegroundColor Yellow
+
+# Copy import library (.dll.lib) and rename to .lib for dynamic linking
+if (Test-Path "$DebugDir/datadog_profiling_ffi.dll.lib") {
+    Copy-Item "$DebugDir/datadog_profiling_ffi.dll.lib" -Destination "$PackageDir/debug/dynamic/datadog_profiling_ffi.lib" -ErrorAction Stop
+} else {
+    Write-Host "  Warning: Debug import library (.dll.lib) not found" -ForegroundColor Yellow
+}
+
+# Static build (static library only)
+if (Test-Path "$DebugDir/datadog_profiling_ffi.lib") {
+    Copy-Item "$DebugDir/datadog_profiling_ffi.lib" -Destination "$PackageDir/debug/static/" -ErrorAction Stop
+} else {
+    Write-Host "  Warning: Debug static library (.lib) not found" -ForegroundColor Yellow
 }
 
 # Copy or generate headers
