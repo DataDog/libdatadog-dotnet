@@ -41,31 +41,38 @@ jobs:
       - name: Determine libdatadog version
         id: version
         shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ github.event.inputs.libdatadog_version }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            $version = "${{ github.event.inputs.libdatadog_version }}"
+          if ($env:EVENT_NAME -eq "workflow_dispatch") {
+            $version = $env:INPUT_VERSION
           } else {
             # Extract version from tag, or default to v25.0.0
-            $version = "${{ github.ref_name }}"
+            $version = $env:REF_NAME
             if (-not $version.StartsWith("v")) {
               $version = "v25.0.0"
             }
           }
-          echo "LIBDATADOG_VERSION=$version" >> $env:GITHUB_OUTPUT
-          echo "Building libdatadog version: $version"
+          # Use GITHUB_OUTPUT to safely pass the version
+          "LIBDATADOG_VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Host "Building libdatadog version: $version"
       
       - name: Build Windows x64
         shell: pwsh
+        env:
+          LIBDATADOG_VERSION: ${{ steps.version.outputs.LIBDATADOG_VERSION }}
         run: |
-          ./build.ps1 -LibdatadogVersion "${{ steps.version.outputs.LIBDATADOG_VERSION }}" -Platform "x64-windows" -Clean
+          ./build.ps1 -LibdatadogVersion $env:LIBDATADOG_VERSION -Platform "x64-windows" -Clean
       
       - name: Calculate SHA512
         id: hash
         shell: pwsh
         run: |
           $hash = (Get-FileHash -Path "output/libdatadog-x64-windows.zip" -Algorithm SHA512).Hash.ToLower()
-          echo "SHA512_X64=$hash" >> $env:GITHUB_OUTPUT
-          echo "x64 SHA512: $hash"
+          "SHA512_X64=$hash" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Host "x64 SHA512: $hash"
       
       - name: Upload artifacts
         uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # v4.5.0
@@ -76,30 +83,34 @@ jobs:
       
       - name: Create release notes
         shell: pwsh
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          LIBDATADOG_VERSION: ${{ steps.version.outputs.LIBDATADOG_VERSION }}
+          SHA512_X64: ${{ steps.hash.outputs.SHA512_X64 }}
         run: |
           $notes = @"
-          # libdatadog-dotnet Release ${{ github.ref_name }}
+          # libdatadog-dotnet Release $env:REF_NAME
 
           Custom libdatadog binaries for dd-trace-dotnet.
 
           ## Components
           
-          - **libdatadog version**: ${{ steps.version.outputs.LIBDATADOG_VERSION }}
+          - **libdatadog version**: $env:LIBDATADOG_VERSION
           - **datadog-profiling-ffi**: Profiling FFI library
           
           ## Artifacts
           
-          - \`libdatadog-x64-windows.zip\` - Windows x64 binaries (SHA512: ${{ steps.hash.outputs.SHA512_X64 }})
+          - ``libdatadog-x64-windows.zip`` - Windows x64 binaries (SHA512: $env:SHA512_X64)
           
           ## Usage
           
           Update your vcpkg portfile to reference this release:
           
-          \`\`\`cmake
-          set(LIBDATADOG_VERSION ${{ github.ref_name }})
-          set(LIBDATADOG_URL "https://github.com/DataDog/libdatadog-dotnet/releases/download/${{ github.ref_name }}/libdatadog-x64-windows.zip")
-          set(LIBDATADOG_HASH "${{ steps.hash.outputs.SHA512_X64 }}")
-          \`\`\`
+          ````cmake
+          set(LIBDATADOG_VERSION $env:REF_NAME)
+          set(LIBDATADOG_URL "https://github.com/DataDog/libdatadog-dotnet/releases/download/$env:REF_NAME/libdatadog-x64-windows.zip")
+          set(LIBDATADOG_HASH "$env:SHA512_X64")
+          ````
           "@
           $notes | Out-File -FilePath release-notes.md -Encoding utf8
       
