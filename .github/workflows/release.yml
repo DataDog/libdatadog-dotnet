@@ -121,6 +121,8 @@ jobs:
   create-release:
     name: Create GitHub Release
     needs: build-windows-x64
+    # Only create releases for version tag pushes, not manual triggers
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -144,7 +146,7 @@ jobs:
             echo "NOTES_FILE=" >> $GITHUB_OUTPUT
           fi
       
-      - name: Create Release
+      - name: Create or Update Release
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:
           RELEASE_TAG: ${{ github.ref_name }}
@@ -152,35 +154,74 @@ jobs:
           script: |
             const fs = require('fs');
             const path = require('path');
-            
+
             // Read release notes
             let body = 'Release artifacts for libdatadog-dotnet';
             const notesFile = '${{ steps.notes.outputs.NOTES_FILE }}';
             if (notesFile && fs.existsSync(notesFile)) {
               body = fs.readFileSync(notesFile, 'utf8');
             }
-            
-            // Create release
-            const release = await github.rest.repos.createRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: process.env.RELEASE_TAG,
-              name: process.env.RELEASE_TAG,
-              body: body,
-              draft: false,
-              prerelease: false
-            });
-            
-            console.log(`Created release: ${release.data.html_url}`);
-            
+
+            const tagName = process.env.RELEASE_TAG;
+            let release;
+
+            // Check if release already exists
+            try {
+              const existingRelease = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: tagName
+              });
+
+              console.log(`Release ${tagName} already exists, updating it`);
+
+              // Delete existing assets
+              for (const asset of existingRelease.data.assets) {
+                console.log(`Deleting existing asset: ${asset.name}`);
+                await github.rest.repos.deleteReleaseAsset({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  asset_id: asset.id
+                });
+              }
+
+              // Update release
+              release = await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: existingRelease.data.id,
+                body: body
+              });
+
+              console.log(`Updated release: ${release.data.html_url}`);
+            } catch (error) {
+              if (error.status === 404) {
+                // Release doesn't exist, create it
+                console.log(`Creating new release ${tagName}`);
+                release = await github.rest.repos.createRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  tag_name: tagName,
+                  name: tagName,
+                  body: body,
+                  draft: false,
+                  prerelease: false
+                });
+
+                console.log(`Created release: ${release.data.html_url}`);
+              } else {
+                throw error;
+              }
+            }
+
             // Upload artifact
             const artifactPath = 'artifacts/libdatadog-x64-windows/libdatadog-x64-windows.zip';
             const artifactName = 'libdatadog-x64-windows.zip';
-            
+
             if (fs.existsSync(artifactPath)) {
               const stats = fs.statSync(artifactPath);
               console.log(`Uploading ${artifactName} (${stats.size} bytes)`);
-              
+
               await github.rest.repos.uploadReleaseAsset({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -188,7 +229,7 @@ jobs:
                 name: artifactName,
                 data: fs.readFileSync(artifactPath)
               });
-              
+
               console.log(`Uploaded ${artifactName}`);
             } else {
               throw new Error(`Artifact not found: ${artifactPath}`);
