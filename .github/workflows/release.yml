@@ -114,9 +114,10 @@ jobs:
         id: create_zip
         run: |
           echo "=== Creating release zip from artifact directory ==="
-          cd artifacts/libdatadog-x64-windows
-          zip -r ../../libdatadog-x64-windows.zip .
-          cd ../..
+          # Zip from artifacts/ to include the wrapper folder
+          cd artifacts
+          zip -r ../libdatadog-x64-windows.zip libdatadog-x64-windows/
+          cd ..
 
           echo "=== Verifying zip structure ==="
           unzip -l libdatadog-x64-windows.zip | head -20
