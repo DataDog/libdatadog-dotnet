@@ -82,10 +82,10 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # v4.5.0
         with:
-          name: libdatadog-x64-windows
-          # Upload the directory, not the zip - we'll create the zip in the release step
-          # This avoids double-zipping by the artifact system
-          path: output/libdatadog-x64-windows/
+          name: libdatadog-build-output
+          # Upload the output directory which contains libdatadog-x64-windows/
+          # This preserves the folder structure
+          path: output/
           if-no-files-found: error
       
       # Release notes are now created in the create-release job after SHA512 calculation
@@ -114,10 +114,10 @@ jobs:
         id: create_zip
         run: |
           echo "=== Creating release zip from artifact directory ==="
-          # Zip from artifacts/ to include the wrapper folder
-          cd artifacts
-          zip -r ../libdatadog-x64-windows.zip libdatadog-x64-windows/
-          cd ..
+          # The artifact now contains output/ directory with libdatadog-x64-windows/ inside
+          cd artifacts/libdatadog-build-output/output
+          zip -r ../../../libdatadog-x64-windows.zip libdatadog-x64-windows/
+          cd ../../..
 
           echo "=== Verifying zip structure ==="
           unzip -l libdatadog-x64-windows.zip | head -20
