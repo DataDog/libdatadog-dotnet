@@ -203,51 +203,8 @@ Copy-Item "libdatadog/LICENSE" -Destination "$PackageDir/" -ErrorAction Silently
 Copy-Item "libdatadog/LICENSE-3rdparty.csv" -Destination "$PackageDir/" -ErrorAction SilentlyContinue
 Copy-Item "libdatadog/NOTICE" -Destination "$PackageDir/" -ErrorAction SilentlyContinue
 
-# Create zip archive
-Write-Host "Creating zip archive..." -ForegroundColor Yellow
-$ZipPath = Join-Path $OutputDir "libdatadog-$Platform.zip"
-if (Test-Path $ZipPath) { Remove-Item $ZipPath }
-
-# Compress with wrapper folder to match original libdatadog structure
-# This creates: libdatadog-x64-windows.zip containing libdatadog-x64-windows/ folder
-$itemsToCompress = Get-ChildItem -Path $PackageDir -Force | ForEach-Object { $_.FullName }
-
-if ($itemsToCompress.Count -eq 0) {
-    Write-Host "Error: No items found in $PackageDir to compress" -ForegroundColor Red
-    exit 1
-}
-
-# Compress from the parent directory to include the wrapper folder
-Push-Location $OutputDir
-try {
-    $folderName = Split-Path $PackageDir -Leaf
-    Write-Host "  Compressing folder: $folderName" -ForegroundColor Gray
-    Compress-Archive -Path $folderName -DestinationPath $ZipPath -CompressionLevel Optimal
-} finally {
-    Pop-Location
-}
-
-# Verify zip contents
-Write-Host "  Verifying zip structure..." -ForegroundColor Gray
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-$zip = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
-$rootEntries = $zip.Entries | Select-Object -First 10 | ForEach-Object { $_.FullName }
-Write-Host "  First 10 entries in zip: $($rootEntries -join ', ')" -ForegroundColor Gray
-$hasWrapperFolder = $zip.Entries[0].FullName.StartsWith("libdatadog-$Platform/")
-if ($hasWrapperFolder) {
-    Write-Host "  ✓ Wrapper folder present: libdatadog-$Platform/" -ForegroundColor Green
-} else {
-    Write-Host "  ✗ WARNING: Wrapper folder missing!" -ForegroundColor Red
-}
-$zip.Dispose()
-
 Write-Host "Build complete!" -ForegroundColor Green
-Write-Host "  Package: $ZipPath" -ForegroundColor Gray
-
-# Calculate and display SHA512
-Write-Host "Calculating SHA512 hash..." -ForegroundColor Yellow
-$Hash = (Get-FileHash -Path $ZipPath -Algorithm SHA512).Hash.ToLower()
-Write-Host "  SHA512: $Hash" -ForegroundColor Gray
+Write-Host "  Package directory: $PackageDir" -ForegroundColor Gray
 
 # Display package contents
 Write-Host ""
