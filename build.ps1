@@ -59,6 +59,16 @@ if (-not (Test-Path "libdatadog")) {
 
 # Build libdatadog profiling FFI
 Write-Host "Building libdatadog profiling FFI..." -ForegroundColor Yellow
+
+# Check if CARGO_BUILD_TARGET is set for cross-compilation
+$cargoTargetArg = ""
+$targetSubdir = ""
+if ($env:CARGO_BUILD_TARGET) {
+    $cargoTargetArg = "--target $env:CARGO_BUILD_TARGET"
+    $targetSubdir = "$env:CARGO_BUILD_TARGET/"
+    Write-Host "  Target architecture: $env:CARGO_BUILD_TARGET" -ForegroundColor Cyan
+}
+
 Push-Location libdatadog
 
 # Build release version
@@ -68,7 +78,8 @@ Push-Location libdatadog
 #   - codegen-units = 1 (better optimization)
 #   - debug = "line-tables-only" (minimal debug info)
 Write-Host "  Building release configuration..." -ForegroundColor Gray
-cargo build --release -p libdd-profiling-ffi
+$releaseCmd = "cargo build --release -p libdd-profiling-ffi $cargoTargetArg"
+Invoke-Expression $releaseCmd
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Error: Release build failed" -ForegroundColor Red
     Pop-Location
@@ -77,7 +88,8 @@ if ($LASTEXITCODE -ne 0) {
 
 # Build debug version
 Write-Host "  Building debug configuration..." -ForegroundColor Gray
-cargo build -p libdd-profiling-ffi
+$debugCmd = "cargo build -p libdd-profiling-ffi $cargoTargetArg"
+Invoke-Expression $debugCmd
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Error: Debug build failed" -ForegroundColor Red
     Pop-Location
@@ -86,9 +98,9 @@ if ($LASTEXITCODE -ne 0) {
 
 Pop-Location
 
-# Verify build outputs exist
-$ReleaseDir = "libdatadog/target/release"
-$DebugDir = "libdatadog/target/debug"
+# Verify build outputs exist (with target subdirectory if cross-compiling)
+$ReleaseDir = "libdatadog/target/${targetSubdir}release"
+$DebugDir = "libdatadog/target/${targetSubdir}debug"
 
 if (-not (Test-Path "$ReleaseDir/datadog_profiling_ffi.dll")) {
     Write-Host "Error: Release build did not produce expected DLL" -ForegroundColor Red
