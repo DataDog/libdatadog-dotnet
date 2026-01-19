@@ -144,11 +144,21 @@ print_yellow "Building libdatadog profiling FFI..."
 CARGO_TARGET_ARG=""
 TARGET_SUBDIR=""
 USE_CROSS=false
+EXTRA_RUSTFLAGS=""
 
 if [ -n "$CARGO_BUILD_TARGET" ]; then
     CARGO_TARGET_ARG="--target $CARGO_BUILD_TARGET"
     TARGET_SUBDIR="$CARGO_BUILD_TARGET/"
     print_cyan "  Target architecture: $CARGO_BUILD_TARGET"
+
+    # Enable dynamic linking for musl targets
+    # By default, musl uses static linking which prevents cdylib from being built
+    case "$CARGO_BUILD_TARGET" in
+        *-musl)
+            EXTRA_RUSTFLAGS="-C target-feature=-crt-static"
+            print_cyan "  Enabling dynamic linking for musl target"
+            ;;
+    esac
 
     # Determine if we need to use cross for this target
     # Use cross for musl and ARM64 targets that require C cross-compilers
@@ -170,6 +180,11 @@ cd libdatadog
 CARGO_CMD="cargo"
 if [ "$USE_CROSS" = true ]; then
     CARGO_CMD="cross"
+fi
+
+# Set RUSTFLAGS if needed (append to existing)
+if [ -n "$EXTRA_RUSTFLAGS" ]; then
+    export RUSTFLAGS="${RUSTFLAGS:-} $EXTRA_RUSTFLAGS"
 fi
 
 # Build release version
@@ -199,11 +214,18 @@ cd ..
 RELEASE_DIR="libdatadog/target/${TARGET_SUBDIR}release"
 DEBUG_DIR="libdatadog/target/${TARGET_SUBDIR}debug"
 
-# Check for .so file (dynamic library on Linux)
-if [ ! -f "$RELEASE_DIR/libdatadog_profiling_ffi.so" ]; then
-    print_red "Error: Release build did not produce expected shared library"
-    print_red "  Expected: $RELEASE_DIR/libdatadog_profiling_ffi.so"
+# Check for build outputs
+# Note: musl targets may not produce .so files (cdylib) and only produce .a files (staticlib)
+if [ ! -f "$RELEASE_DIR/libdatadog_profiling_ffi.so" ] && [ ! -f "$RELEASE_DIR/libdatadog_profiling_ffi.a" ]; then
+    print_red "Error: Release build did not produce expected libraries"
+    print_red "  Expected either: $RELEASE_DIR/libdatadog_profiling_ffi.so"
+    print_red "               or: $RELEASE_DIR/libdatadog_profiling_ffi.a"
     exit 1
+fi
+
+# Warn if only static library is available (common for musl targets)
+if [ ! -f "$RELEASE_DIR/libdatadog_profiling_ffi.so" ] && [ -f "$RELEASE_DIR/libdatadog_profiling_ffi.a" ]; then
+    print_yellow "  Note: Only static library available (typical for musl targets)"
 fi
 
 # Package the binaries
