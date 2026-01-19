@@ -91,7 +91,7 @@ jobs:
           CARGO_BUILD_TARGET: ${{ matrix.target }}
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
-            pwsh -Command "./build.ps1 -LibdatadogVersion $env:LIBDATADOG_VERSION -Platform '${{ matrix.platform }}' -Clean -OutputDir 'output/libdatadog-${{ matrix.platform }}'"
+            pwsh -Command "./build.ps1 -LibdatadogVersion '${LIBDATADOG_VERSION}' -Platform '${{ matrix.platform }}' -Clean -OutputDir 'output/libdatadog-${{ matrix.platform }}'"
           else
             chmod +x build.sh
             ./build.sh --version "$LIBDATADOG_VERSION" --platform "${{ matrix.platform }}" --clean --output "output/libdatadog-${{ matrix.platform }}"
