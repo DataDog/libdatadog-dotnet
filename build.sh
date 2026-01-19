@@ -251,13 +251,6 @@ print_gray "  Copying release artifacts..."
 # Dynamic build (shared library .so) - rename to libdatadog_profiling.so
 if [ -f "$RELEASE_DIR/libdatadog_profiling_ffi.so" ]; then
     cp "$RELEASE_DIR/libdatadog_profiling_ffi.so" "$PACKAGE_DIR/lib/libdatadog_profiling.so"
-
-    # Strip debug symbols into separate .debug file (matches original)
-    if command -v objcopy &> /dev/null; then
-        objcopy --only-keep-debug "$PACKAGE_DIR/lib/libdatadog_profiling.so" "$PACKAGE_DIR/lib/libdatadog_profiling.debug" 2>/dev/null || true
-        objcopy --strip-debug "$PACKAGE_DIR/lib/libdatadog_profiling.so" 2>/dev/null || true
-        objcopy --add-gnu-debuglink="$PACKAGE_DIR/lib/libdatadog_profiling.debug" "$PACKAGE_DIR/lib/libdatadog_profiling.so" 2>/dev/null || true
-    fi
 else
     print_yellow "  Warning: Release shared library (.so) not found"
 fi
@@ -267,6 +260,63 @@ if [ -f "$RELEASE_DIR/libdatadog_profiling_ffi.a" ]; then
     cp "$RELEASE_DIR/libdatadog_profiling_ffi.a" "$PACKAGE_DIR/lib/libdatadog_profiling.a"
 else
     print_yellow "  Warning: Release static library (.a) not found"
+fi
+
+# Strip libraries (matches libdatadog's exact process)
+print_gray "  Stripping binaries and extracting debug symbols..."
+
+# Step 1: Remove LLVM bitcode section from static library (reduces size significantly)
+if [ -f "$PACKAGE_DIR/lib/libdatadog_profiling.a" ]; then
+    if command -v objcopy &> /dev/null; then
+        print_gray "    Removing .llvmbc section from static library..."
+        objcopy --remove-section .llvmbc "$PACKAGE_DIR/lib/libdatadog_profiling.a" 2>/dev/null || {
+            print_yellow "    Warning: Failed to remove .llvmbc section (objcopy may not be available)"
+        }
+    fi
+fi
+
+# Step 2-4: Extract debug symbols, strip .so, and link debug file
+if [ -f "$PACKAGE_DIR/lib/libdatadog_profiling.so" ]; then
+    # Check if tools are available
+    if command -v objcopy &> /dev/null && command -v strip &> /dev/null; then
+        # Step 2: Extract debug symbols
+        print_gray "    Extracting debug symbols..."
+        objcopy --only-keep-debug \
+            "$PACKAGE_DIR/lib/libdatadog_profiling.so" \
+            "$PACKAGE_DIR/lib/libdatadog_profiling.debug" || {
+            print_yellow "    Warning: Failed to extract debug symbols"
+        }
+
+        # Step 3: Strip the shared library
+        # Use -S for glibc (preserves global symbols), -s for musl (strip all)
+        print_gray "    Stripping shared library..."
+        case "$CARGO_BUILD_TARGET" in
+            *-musl)
+                # musl uses full strip (-s)
+                strip -s "$PACKAGE_DIR/lib/libdatadog_profiling.so" || {
+                    print_yellow "    Warning: Failed to strip library"
+                }
+                ;;
+            *)
+                # glibc uses -S (strip debug symbols but keep global symbols)
+                strip -S "$PACKAGE_DIR/lib/libdatadog_profiling.so" || {
+                    print_yellow "    Warning: Failed to strip library"
+                }
+                ;;
+        esac
+
+        # Step 4: Link debug symbols to stripped binary
+        if [ -f "$PACKAGE_DIR/lib/libdatadog_profiling.debug" ]; then
+            print_gray "    Linking debug symbols..."
+            objcopy --add-gnu-debuglink="$PACKAGE_DIR/lib/libdatadog_profiling.debug" \
+                "$PACKAGE_DIR/lib/libdatadog_profiling.so" || {
+                print_yellow "    Warning: Failed to link debug symbols"
+            }
+        fi
+    else
+        print_yellow "    Warning: objcopy and/or strip not available, binaries will not be stripped"
+        print_yellow "    This will result in much larger files than the original libdatadog releases"
+    fi
 fi
 
 # Copy all headers from libdatadog
