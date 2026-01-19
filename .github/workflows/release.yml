@@ -16,20 +16,41 @@ permissions:
   contents: read
 
 jobs:
-  build-windows:
-    name: Build Windows ${{ matrix.arch }}
-    runs-on: windows-latest
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: read
     strategy:
       matrix:
         include:
+          # Windows builds
           - arch: x64
             platform: x64-windows
             target: x86_64-pc-windows-msvc
+            os: windows-latest
           - arch: x86
             platform: x86-windows
             target: i686-pc-windows-msvc
+            os: windows-latest
+          # Linux x64 builds
+          - arch: x64
+            platform: x86_64-unknown-linux-gnu
+            target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - arch: x64
+            platform: x86_64-alpine-linux-musl
+            target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+          # Linux ARM64 builds
+          - arch: arm64
+            platform: aarch64-unknown-linux-gnu
+            target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+          - arch: arm64
+            platform: aarch64-alpine-linux-musl
+            target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
     outputs:
       libdatadog_version: ${{ steps.version.outputs.LIBDATADOG_VERSION }}
 
@@ -64,13 +85,18 @@ jobs:
           "LIBDATADOG_VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           Write-Host "Building libdatadog version: $version"
 
-      - name: Build Windows ${{ matrix.arch }}
-        shell: pwsh
+      - name: Build ${{ matrix.platform }}
         env:
           LIBDATADOG_VERSION: ${{ steps.version.outputs.LIBDATADOG_VERSION }}
           CARGO_BUILD_TARGET: ${{ matrix.target }}
         run: |
-          ./build.ps1 -LibdatadogVersion $env:LIBDATADOG_VERSION -Platform "${{ matrix.platform }}" -Clean -OutputDir "output/libdatadog-${{ matrix.platform }}"
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            pwsh -Command "./build.ps1 -LibdatadogVersion $env:LIBDATADOG_VERSION -Platform '${{ matrix.platform }}' -Clean -OutputDir 'output/libdatadog-${{ matrix.platform }}'"
+          else
+            chmod +x build.sh
+            ./build.sh --version "$LIBDATADOG_VERSION" --platform "${{ matrix.platform }}" --clean --output "output/libdatadog-${{ matrix.platform }}"
+          fi
+        shell: bash
 
       - name: Upload artifacts
         uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # v4.5.0
@@ -81,7 +107,7 @@ jobs:
 
   create-release:
     name: Create GitHub Release
-    needs: build-windows
+    needs: build
     # Only create releases for version tag pushes, not manual triggers
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
@@ -99,34 +125,60 @@ jobs:
           echo "=== Artifact directory structure ==="
           ls -R artifacts/
 
-      - name: Create release zips
-        id: create_zips
+      - name: Create release archives
+        id: create_archives
         run: |
-          echo "=== Creating x64 release zip ==="
+          echo "=== Creating Windows x64 zip ==="
           cd artifacts/libdatadog-x64-windows
           zip -r ../../libdatadog-x64-windows.zip libdatadog-x64-windows/
           cd ../..
 
-          echo "=== Creating x86 release zip ==="
+          echo "=== Creating Windows x86 zip ==="
           cd artifacts/libdatadog-x86-windows
           zip -r ../../libdatadog-x86-windows.zip libdatadog-x86-windows/
           cd ../..
 
-          echo "=== Verifying x64 zip structure ==="
-          unzip -l libdatadog-x64-windows.zip | head -20
+          echo "=== Creating Linux x86_64-unknown-linux-gnu tar.gz ==="
+          cd artifacts/libdatadog-x86_64-unknown-linux-gnu
+          tar -czf ../../libdatadog-x86_64-unknown-linux-gnu.tar.gz libdatadog-x86_64-unknown-linux-gnu/
+          cd ../..
 
-          echo "=== Verifying x86 zip structure ==="
-          unzip -l libdatadog-x86-windows.zip | head -20
+          echo "=== Creating Linux x86_64-alpine-linux-musl tar.gz ==="
+          cd artifacts/libdatadog-x86_64-alpine-linux-musl
+          tar -czf ../../libdatadog-x86_64-alpine-linux-musl.tar.gz libdatadog-x86_64-alpine-linux-musl/
+          cd ../..
+
+          echo "=== Creating Linux aarch64-unknown-linux-gnu tar.gz ==="
+          cd artifacts/libdatadog-aarch64-unknown-linux-gnu
+          tar -czf ../../libdatadog-aarch64-unknown-linux-gnu.tar.gz libdatadog-aarch64-unknown-linux-gnu/
+          cd ../..
+
+          echo "=== Creating Linux aarch64-alpine-linux-musl tar.gz ==="
+          cd artifacts/libdatadog-aarch64-alpine-linux-musl
+          tar -czf ../../libdatadog-aarch64-alpine-linux-musl.tar.gz libdatadog-aarch64-alpine-linux-musl/
+          cd ../..
 
           echo "=== Calculating SHA512 hashes ==="
-          SHA512_X64=$(sha512sum libdatadog-x64-windows.zip | cut -d' ' -f1)
-          SHA512_X86=$(sha512sum libdatadog-x86-windows.zip | cut -d' ' -f1)
+          SHA512_WIN_X64=$(sha512sum libdatadog-x64-windows.zip | cut -d' ' -f1)
+          SHA512_WIN_X86=$(sha512sum libdatadog-x86-windows.zip | cut -d' ' -f1)
+          SHA512_LINUX_X64_GNU=$(sha512sum libdatadog-x86_64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)
+          SHA512_LINUX_X64_MUSL=$(sha512sum libdatadog-x86_64-alpine-linux-musl.tar.gz | cut -d' ' -f1)
+          SHA512_LINUX_ARM64_GNU=$(sha512sum libdatadog-aarch64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)
+          SHA512_LINUX_ARM64_MUSL=$(sha512sum libdatadog-aarch64-alpine-linux-musl.tar.gz | cut -d' ' -f1)
 
-          echo "SHA512_X64=$SHA512_X64" >> $GITHUB_OUTPUT
-          echo "SHA512_X86=$SHA512_X86" >> $GITHUB_OUTPUT
+          echo "SHA512_WIN_X64=$SHA512_WIN_X64" >> $GITHUB_OUTPUT
+          echo "SHA512_WIN_X86=$SHA512_WIN_X86" >> $GITHUB_OUTPUT
+          echo "SHA512_LINUX_X64_GNU=$SHA512_LINUX_X64_GNU" >> $GITHUB_OUTPUT
+          echo "SHA512_LINUX_X64_MUSL=$SHA512_LINUX_X64_MUSL" >> $GITHUB_OUTPUT
+          echo "SHA512_LINUX_ARM64_GNU=$SHA512_LINUX_ARM64_GNU" >> $GITHUB_OUTPUT
+          echo "SHA512_LINUX_ARM64_MUSL=$SHA512_LINUX_ARM64_MUSL" >> $GITHUB_OUTPUT
 
-          echo "x64 SHA512: $SHA512_X64"
-          echo "x86 SHA512: $SHA512_X86"
+          echo "Windows x64 SHA512: $SHA512_WIN_X64"
+          echo "Windows x86 SHA512: $SHA512_WIN_X86"
+          echo "Linux x64 GNU SHA512: $SHA512_LINUX_X64_GNU"
+          echo "Linux x64 MUSL SHA512: $SHA512_LINUX_X64_MUSL"
+          echo "Linux ARM64 GNU SHA512: $SHA512_LINUX_ARM64_GNU"
+          echo "Linux ARM64 MUSL SHA512: $SHA512_LINUX_ARM64_MUSL"
       
       - name: Create release notes
         run: |
@@ -137,34 +189,61 @@ jobs:
 
           ## Components
 
-          - **libdatadog version**: ${{ needs.build-windows.outputs.libdatadog_version }}
+          - **libdatadog version**: ${{ needs.build.outputs.libdatadog_version }}
           - **datadog-profiling-ffi**: Profiling FFI library
 
           ## Artifacts
 
-          - `libdatadog-x64-windows.zip` - Windows x64 binaries (SHA512: ${{ steps.create_zips.outputs.SHA512_X64 }})
-          - `libdatadog-x86-windows.zip` - Windows x86 binaries (SHA512: ${{ steps.create_zips.outputs.SHA512_X86 }})
+          ### Windows
+          - `libdatadog-x64-windows.zip` - Windows x64 binaries (SHA512: ${{ steps.create_archives.outputs.SHA512_WIN_X64 }})
+          - `libdatadog-x86-windows.zip` - Windows x86 binaries (SHA512: ${{ steps.create_archives.outputs.SHA512_WIN_X86 }})
+
+          ### Linux
+          - `libdatadog-x86_64-unknown-linux-gnu.tar.gz` - Linux x64 (glibc) (SHA512: ${{ steps.create_archives.outputs.SHA512_LINUX_X64_GNU }})
+          - `libdatadog-x86_64-alpine-linux-musl.tar.gz` - Linux x64 (musl/Alpine) (SHA512: ${{ steps.create_archives.outputs.SHA512_LINUX_X64_MUSL }})
+          - `libdatadog-aarch64-unknown-linux-gnu.tar.gz` - Linux ARM64 (glibc) (SHA512: ${{ steps.create_archives.outputs.SHA512_LINUX_ARM64_GNU }})
+          - `libdatadog-aarch64-alpine-linux-musl.tar.gz` - Linux ARM64 (musl/Alpine) (SHA512: ${{ steps.create_archives.outputs.SHA512_LINUX_ARM64_MUSL }})
 
           ## Usage
 
-          ### For x64 (64-bit)
-
+          ### Windows x64
           Update your vcpkg portfile to reference this release:
-
           ```cmake
           set(LIBDATADOG_VERSION ${{ github.ref_name }})
           set(LIBDATADOG_URL "https://github.com/DataDog/libdatadog-dotnet/releases/download/${{ github.ref_name }}/libdatadog-x64-windows.zip")
-          set(LIBDATADOG_HASH "${{ steps.create_zips.outputs.SHA512_X64 }}")
+          set(LIBDATADOG_HASH "${{ steps.create_archives.outputs.SHA512_WIN_X64 }}")
           ```
 
-          ### For x86 (32-bit)
-
+          ### Windows x86
           Update your vcpkg portfile to reference this release:
-
           ```cmake
           set(LIBDATADOG_VERSION ${{ github.ref_name }})
           set(LIBDATADOG_URL "https://github.com/DataDog/libdatadog-dotnet/releases/download/${{ github.ref_name }}/libdatadog-x86-windows.zip")
-          set(LIBDATADOG_HASH "${{ steps.create_zips.outputs.SHA512_X86 }}")
+          set(LIBDATADOG_HASH "${{ steps.create_archives.outputs.SHA512_WIN_X86 }}")
+          ```
+
+          ### Linux x64 (glibc)
+          ```bash
+          wget https://github.com/DataDog/libdatadog-dotnet/releases/download/${{ github.ref_name }}/libdatadog-x86_64-unknown-linux-gnu.tar.gz
+          echo "${{ steps.create_archives.outputs.SHA512_LINUX_X64_GNU }}  libdatadog-x86_64-unknown-linux-gnu.tar.gz" | sha512sum -c
+          ```
+
+          ### Linux x64 (musl/Alpine)
+          ```bash
+          wget https://github.com/DataDog/libdatadog-dotnet/releases/download/${{ github.ref_name }}/libdatadog-x86_64-alpine-linux-musl.tar.gz
+          echo "${{ steps.create_archives.outputs.SHA512_LINUX_X64_MUSL }}  libdatadog-x86_64-alpine-linux-musl.tar.gz" | sha512sum -c
+          ```
+
+          ### Linux ARM64 (glibc)
+          ```bash
+          wget https://github.com/DataDog/libdatadog-dotnet/releases/download/${{ github.ref_name }}/libdatadog-aarch64-unknown-linux-gnu.tar.gz
+          echo "${{ steps.create_archives.outputs.SHA512_LINUX_ARM64_GNU }}  libdatadog-aarch64-unknown-linux-gnu.tar.gz" | sha512sum -c
+          ```
+
+          ### Linux ARM64 (musl/Alpine)
+          ```bash
+          wget https://github.com/DataDog/libdatadog-dotnet/releases/download/${{ github.ref_name }}/libdatadog-aarch64-alpine-linux-musl.tar.gz
+          echo "${{ steps.create_archives.outputs.SHA512_LINUX_ARM64_MUSL }}  libdatadog-aarch64-alpine-linux-musl.tar.gz" | sha512sum -c
           ```
           NOTES_EOF
 
@@ -239,10 +318,16 @@ jobs:
               }
             }
 
-            // Upload artifacts (zips created in previous step)
+            // Upload artifacts (archives created in previous step)
             const artifacts = [
+              // Windows
               { path: 'libdatadog-x64-windows.zip', name: 'libdatadog-x64-windows.zip' },
-              { path: 'libdatadog-x86-windows.zip', name: 'libdatadog-x86-windows.zip' }
+              { path: 'libdatadog-x86-windows.zip', name: 'libdatadog-x86-windows.zip' },
+              // Linux
+              { path: 'libdatadog-x86_64-unknown-linux-gnu.tar.gz', name: 'libdatadog-x86_64-unknown-linux-gnu.tar.gz' },
+              { path: 'libdatadog-x86_64-alpine-linux-musl.tar.gz', name: 'libdatadog-x86_64-alpine-linux-musl.tar.gz' },
+              { path: 'libdatadog-aarch64-unknown-linux-gnu.tar.gz', name: 'libdatadog-aarch64-unknown-linux-gnu.tar.gz' },
+              { path: 'libdatadog-aarch64-alpine-linux-musl.tar.gz', name: 'libdatadog-aarch64-alpine-linux-musl.tar.gz' }
             ];
 
             for (const artifact of artifacts) {
