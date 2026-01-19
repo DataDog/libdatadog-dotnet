@@ -161,8 +161,13 @@ if [ -n "$CARGO_BUILD_TARGET" ]; then
     esac
 
     # Determine if we need to use cross for this target
-    # Use cross for musl and ARM64 targets that require C cross-compilers
+    # Use cross for musl and ARM64 Linux targets that require C cross-compilers
+    # Don't use cross for macOS - use native cargo cross-compilation instead
     case "$CARGO_BUILD_TARGET" in
+        *-apple-darwin)
+            # macOS targets don't need cross - use native cargo
+            USE_CROSS=false
+            ;;
         x86_64-unknown-linux-musl|aarch64-unknown-linux-gnu|aarch64-unknown-linux-musl)
             if command -v cross &> /dev/null; then
                 USE_CROSS=true
@@ -248,11 +253,25 @@ done
 # Copy release artifacts and rename to match original libdatadog naming
 print_gray "  Copying release artifacts..."
 
-# Dynamic build (shared library .so) - rename to libdatadog_profiling.so
-if [ -f "$RELEASE_DIR/libdatadog_profiling_ffi.so" ]; then
-    cp "$RELEASE_DIR/libdatadog_profiling_ffi.so" "$PACKAGE_DIR/lib/libdatadog_profiling.so"
+# Determine library extension based on platform
+case "$CARGO_BUILD_TARGET" in
+    *-apple-darwin)
+        # macOS uses .dylib
+        DYNAMIC_LIB_EXT="dylib"
+        DYNAMIC_LIB_NAME="libdatadog_profiling.dylib"
+        ;;
+    *)
+        # Linux uses .so
+        DYNAMIC_LIB_EXT="so"
+        DYNAMIC_LIB_NAME="libdatadog_profiling.so"
+        ;;
+esac
+
+# Dynamic build (shared library) - rename to libdatadog_profiling.so/.dylib
+if [ -f "$RELEASE_DIR/libdatadog_profiling_ffi.$DYNAMIC_LIB_EXT" ]; then
+    cp "$RELEASE_DIR/libdatadog_profiling_ffi.$DYNAMIC_LIB_EXT" "$PACKAGE_DIR/lib/$DYNAMIC_LIB_NAME"
 else
-    print_yellow "  Warning: Release shared library (.so) not found"
+    print_yellow "  Warning: Release shared library (.$DYNAMIC_LIB_EXT) not found"
 fi
 
 # Static build (static library .a) - rename to libdatadog_profiling.a
@@ -308,48 +327,71 @@ if [ -f "$PACKAGE_DIR/lib/libdatadog_profiling.a" ]; then
     fi
 fi
 
-# Step 2-4: Extract debug symbols, strip .so, and link debug file
-if [ -f "$PACKAGE_DIR/lib/libdatadog_profiling.so" ]; then
-    # Check if tools are available
-    if command -v $OBJCOPY_CMD &> /dev/null && command -v $STRIP_CMD &> /dev/null; then
-        # Step 2: Extract debug symbols
-        print_gray "    Extracting debug symbols..."
-        $OBJCOPY_CMD --only-keep-debug \
-            "$PACKAGE_DIR/lib/libdatadog_profiling.so" \
-            "$PACKAGE_DIR/lib/libdatadog_profiling.debug" || {
-            print_yellow "    Warning: Failed to extract debug symbols"
-        }
-
-        # Step 3: Strip the shared library
-        # Use -S for glibc (preserves global symbols), -s for musl (strip all)
-        print_gray "    Stripping shared library..."
-        case "$CARGO_BUILD_TARGET" in
-            *-musl)
-                # musl uses full strip (-s)
-                $STRIP_CMD -s "$PACKAGE_DIR/lib/libdatadog_profiling.so" || {
+# Step 2-4: Platform-specific stripping
+if [ -f "$PACKAGE_DIR/lib/$DYNAMIC_LIB_NAME" ]; then
+    case "$CARGO_BUILD_TARGET" in
+        *-apple-darwin)
+            # macOS stripping (simpler - no separate debug file)
+            if command -v strip &> /dev/null; then
+                print_gray "    Stripping macOS library..."
+                strip -S "$PACKAGE_DIR/lib/$DYNAMIC_LIB_NAME" || {
                     print_yellow "    Warning: Failed to strip library"
                 }
-                ;;
-            *)
-                # glibc uses -S (strip debug symbols but keep global symbols)
-                $STRIP_CMD -S "$PACKAGE_DIR/lib/libdatadog_profiling.so" || {
-                    print_yellow "    Warning: Failed to strip library"
-                }
-                ;;
-        esac
 
-        # Step 4: Link debug symbols to stripped binary
-        if [ -f "$PACKAGE_DIR/lib/libdatadog_profiling.debug" ]; then
-            print_gray "    Linking debug symbols..."
-            $OBJCOPY_CMD --add-gnu-debuglink="$PACKAGE_DIR/lib/libdatadog_profiling.debug" \
-                "$PACKAGE_DIR/lib/libdatadog_profiling.so" || {
-                print_yellow "    Warning: Failed to link debug symbols"
-            }
-        fi
-    else
-        print_yellow "    Warning: $OBJCOPY_CMD and/or $STRIP_CMD not available, binaries will not be stripped"
-        print_yellow "    This will result in much larger files than the original libdatadog releases"
-    fi
+                # Fix rpath using install_name_tool (macOS-specific)
+                if command -v install_name_tool &> /dev/null; then
+                    print_gray "    Fixing rpath with install_name_tool..."
+                    install_name_tool -id "@rpath/$DYNAMIC_LIB_NAME" "$PACKAGE_DIR/lib/$DYNAMIC_LIB_NAME" || {
+                        print_yellow "    Warning: Failed to fix rpath"
+                    }
+                fi
+            else
+                print_yellow "    Warning: strip not available, binary will not be stripped"
+            fi
+            ;;
+        *)
+            # Linux stripping (with separate debug file)
+            if command -v $OBJCOPY_CMD &> /dev/null && command -v $STRIP_CMD &> /dev/null; then
+                # Step 2: Extract debug symbols
+                print_gray "    Extracting debug symbols..."
+                $OBJCOPY_CMD --only-keep-debug \
+                    "$PACKAGE_DIR/lib/$DYNAMIC_LIB_NAME" \
+                    "$PACKAGE_DIR/lib/libdatadog_profiling.debug" || {
+                    print_yellow "    Warning: Failed to extract debug symbols"
+                }
+
+                # Step 3: Strip the shared library
+                # Use -S for glibc (preserves global symbols), -s for musl (strip all)
+                print_gray "    Stripping shared library..."
+                case "$CARGO_BUILD_TARGET" in
+                    *-musl)
+                        # musl uses full strip (-s)
+                        $STRIP_CMD -s "$PACKAGE_DIR/lib/$DYNAMIC_LIB_NAME" || {
+                            print_yellow "    Warning: Failed to strip library"
+                        }
+                        ;;
+                    *)
+                        # glibc uses -S (strip debug symbols but keep global symbols)
+                        $STRIP_CMD -S "$PACKAGE_DIR/lib/$DYNAMIC_LIB_NAME" || {
+                            print_yellow "    Warning: Failed to strip library"
+                        }
+                        ;;
+                esac
+
+                # Step 4: Link debug symbols to stripped binary
+                if [ -f "$PACKAGE_DIR/lib/libdatadog_profiling.debug" ]; then
+                    print_gray "    Linking debug symbols..."
+                    $OBJCOPY_CMD --add-gnu-debuglink="$PACKAGE_DIR/lib/libdatadog_profiling.debug" \
+                        "$PACKAGE_DIR/lib/$DYNAMIC_LIB_NAME" || {
+                        print_yellow "    Warning: Failed to link debug symbols"
+                    }
+                fi
+            else
+                print_yellow "    Warning: $OBJCOPY_CMD and/or $STRIP_CMD not available, binaries will not be stripped"
+                print_yellow "    This will result in much larger files than the original libdatadog releases"
+            fi
+            ;;
+    esac
 fi
 
 # Copy all headers from libdatadog
@@ -406,18 +448,29 @@ EOF
 
 # Create CMake config file
 print_gray "  Creating CMake config..."
-cat > "$PACKAGE_DIR/cmake/DatadogConfig.cmake" << 'EOF'
+
+# Determine library location for CMake based on platform
+case "$CARGO_BUILD_TARGET" in
+    *-apple-darwin)
+        CMAKE_LIB_LOCATION="\${DATADOG_LIBRARY_DIRS}/libdatadog_profiling.dylib"
+        ;;
+    *)
+        CMAKE_LIB_LOCATION="\${DATADOG_LIBRARY_DIRS}/libdatadog_profiling.so"
+        ;;
+esac
+
+cat > "$PACKAGE_DIR/cmake/DatadogConfig.cmake" << EOF
 # DatadogConfig.cmake
-get_filename_component(DATADOG_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
-set(DATADOG_INCLUDE_DIRS "${DATADOG_CMAKE_DIR}/../include")
-set(DATADOG_LIBRARY_DIRS "${DATADOG_CMAKE_DIR}/../lib")
+get_filename_component(DATADOG_CMAKE_DIR "\${CMAKE_CURRENT_LIST_FILE}" PATH)
+set(DATADOG_INCLUDE_DIRS "\${DATADOG_CMAKE_DIR}/../include")
+set(DATADOG_LIBRARY_DIRS "\${DATADOG_CMAKE_DIR}/../lib")
 set(DATADOG_LIBRARIES datadog_profiling)
 
 # Set up imported target
 add_library(Datadog::Profiling SHARED IMPORTED)
 set_target_properties(Datadog::Profiling PROPERTIES
-    INTERFACE_INCLUDE_DIRECTORIES "${DATADOG_INCLUDE_DIRS}"
-    IMPORTED_LOCATION "${DATADOG_LIBRARY_DIRS}/libdatadog_profiling.so"
+    INTERFACE_INCLUDE_DIRECTORIES "\${DATADOG_INCLUDE_DIRS}"
+    IMPORTED_LOCATION "$CMAKE_LIB_LOCATION"
 )
 EOF
 
