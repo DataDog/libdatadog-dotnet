@@ -265,23 +265,56 @@ fi
 # Strip libraries (matches libdatadog's exact process)
 print_gray "  Stripping binaries and extracting debug symbols..."
 
+# Determine tool prefix for cross-compilation
+OBJCOPY_CMD="objcopy"
+STRIP_CMD="strip"
+
+if [ -n "$CARGO_BUILD_TARGET" ]; then
+    case "$CARGO_BUILD_TARGET" in
+        aarch64-*-gnu)
+            # ARM64 GNU targets need aarch64-linux-gnu- prefix
+            OBJCOPY_CMD="aarch64-linux-gnu-objcopy"
+            STRIP_CMD="aarch64-linux-gnu-strip"
+            ;;
+        aarch64-*-musl)
+            # ARM64 musl targets - try specific tool first, fall back to gnu
+            if command -v aarch64-linux-musl-objcopy &> /dev/null; then
+                OBJCOPY_CMD="aarch64-linux-musl-objcopy"
+                STRIP_CMD="aarch64-linux-musl-strip"
+            else
+                OBJCOPY_CMD="aarch64-linux-gnu-objcopy"
+                STRIP_CMD="aarch64-linux-gnu-strip"
+            fi
+            ;;
+        x86_64-*-musl)
+            # x86_64 musl can use native tools
+            OBJCOPY_CMD="objcopy"
+            STRIP_CMD="strip"
+            ;;
+    esac
+fi
+
+print_gray "    Using tools: $OBJCOPY_CMD, $STRIP_CMD"
+
 # Step 1: Remove LLVM bitcode section from static library (reduces size significantly)
 if [ -f "$PACKAGE_DIR/lib/libdatadog_profiling.a" ]; then
-    if command -v objcopy &> /dev/null; then
+    if command -v $OBJCOPY_CMD &> /dev/null; then
         print_gray "    Removing .llvmbc section from static library..."
-        objcopy --remove-section .llvmbc "$PACKAGE_DIR/lib/libdatadog_profiling.a" 2>/dev/null || {
-            print_yellow "    Warning: Failed to remove .llvmbc section (objcopy may not be available)"
+        $OBJCOPY_CMD --remove-section .llvmbc "$PACKAGE_DIR/lib/libdatadog_profiling.a" 2>/dev/null || {
+            print_yellow "    Warning: Failed to remove .llvmbc section (may not be available for this target)"
         }
+    else
+        print_yellow "    Warning: $OBJCOPY_CMD not available, cannot optimize static library"
     fi
 fi
 
 # Step 2-4: Extract debug symbols, strip .so, and link debug file
 if [ -f "$PACKAGE_DIR/lib/libdatadog_profiling.so" ]; then
     # Check if tools are available
-    if command -v objcopy &> /dev/null && command -v strip &> /dev/null; then
+    if command -v $OBJCOPY_CMD &> /dev/null && command -v $STRIP_CMD &> /dev/null; then
         # Step 2: Extract debug symbols
         print_gray "    Extracting debug symbols..."
-        objcopy --only-keep-debug \
+        $OBJCOPY_CMD --only-keep-debug \
             "$PACKAGE_DIR/lib/libdatadog_profiling.so" \
             "$PACKAGE_DIR/lib/libdatadog_profiling.debug" || {
             print_yellow "    Warning: Failed to extract debug symbols"
@@ -293,13 +326,13 @@ if [ -f "$PACKAGE_DIR/lib/libdatadog_profiling.so" ]; then
         case "$CARGO_BUILD_TARGET" in
             *-musl)
                 # musl uses full strip (-s)
-                strip -s "$PACKAGE_DIR/lib/libdatadog_profiling.so" || {
+                $STRIP_CMD -s "$PACKAGE_DIR/lib/libdatadog_profiling.so" || {
                     print_yellow "    Warning: Failed to strip library"
                 }
                 ;;
             *)
                 # glibc uses -S (strip debug symbols but keep global symbols)
-                strip -S "$PACKAGE_DIR/lib/libdatadog_profiling.so" || {
+                $STRIP_CMD -S "$PACKAGE_DIR/lib/libdatadog_profiling.so" || {
                     print_yellow "    Warning: Failed to strip library"
                 }
                 ;;
@@ -308,13 +341,13 @@ if [ -f "$PACKAGE_DIR/lib/libdatadog_profiling.so" ]; then
         # Step 4: Link debug symbols to stripped binary
         if [ -f "$PACKAGE_DIR/lib/libdatadog_profiling.debug" ]; then
             print_gray "    Linking debug symbols..."
-            objcopy --add-gnu-debuglink="$PACKAGE_DIR/lib/libdatadog_profiling.debug" \
+            $OBJCOPY_CMD --add-gnu-debuglink="$PACKAGE_DIR/lib/libdatadog_profiling.debug" \
                 "$PACKAGE_DIR/lib/libdatadog_profiling.so" || {
                 print_yellow "    Warning: Failed to link debug symbols"
             }
         fi
     else
-        print_yellow "    Warning: objcopy and/or strip not available, binaries will not be stripped"
+        print_yellow "    Warning: $OBJCOPY_CMD and/or $STRIP_CMD not available, binaries will not be stripped"
         print_yellow "    This will result in much larger files than the original libdatadog releases"
     fi
 fi

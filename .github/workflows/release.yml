@@ -65,10 +65,22 @@ jobs:
           rustup component add rustfmt clippy
           rustup target add ${{ matrix.target }}
 
-      - name: Install cross-compilation tool (Linux only)
+      - name: Install cross-compilation tools (Linux only)
         if: matrix.os == 'ubuntu-latest' && matrix.target != 'x86_64-unknown-linux-gnu'
         run: |
+          # Install cross for building
           cargo install cross --git https://github.com/cross-rs/cross
+
+          # Install target-specific binutils for stripping
+          sudo apt-get update
+          case "${{ matrix.target }}" in
+            aarch64-*)
+              sudo apt-get install -y binutils-aarch64-linux-gnu
+              ;;
+            x86_64-*-musl)
+              sudo apt-get install -y musl-tools
+              ;;
+          esac
 
       - name: Determine libdatadog version
         id: version
