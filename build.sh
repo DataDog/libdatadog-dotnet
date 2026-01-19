@@ -143,13 +143,34 @@ print_yellow "Building libdatadog profiling FFI..."
 # Check if CARGO_BUILD_TARGET is set for cross-compilation
 CARGO_TARGET_ARG=""
 TARGET_SUBDIR=""
+USE_CROSS=false
+
 if [ -n "$CARGO_BUILD_TARGET" ]; then
     CARGO_TARGET_ARG="--target $CARGO_BUILD_TARGET"
     TARGET_SUBDIR="$CARGO_BUILD_TARGET/"
     print_cyan "  Target architecture: $CARGO_BUILD_TARGET"
+
+    # Determine if we need to use cross for this target
+    # Use cross for musl and ARM64 targets that require C cross-compilers
+    case "$CARGO_BUILD_TARGET" in
+        x86_64-unknown-linux-musl|aarch64-unknown-linux-gnu|aarch64-unknown-linux-musl)
+            if command -v cross &> /dev/null; then
+                USE_CROSS=true
+                print_cyan "  Using 'cross' for cross-compilation"
+            else
+                print_yellow "  Warning: 'cross' not found, trying native cargo (may fail for targets requiring C cross-compiler)"
+            fi
+            ;;
+    esac
 fi
 
 cd libdatadog
+
+# Select cargo or cross
+CARGO_CMD="cargo"
+if [ "$USE_CROSS" = true ]; then
+    CARGO_CMD="cross"
+fi
 
 # Build release version
 # Note: The Cargo.toml already has optimized release profile:
@@ -157,16 +178,16 @@ cd libdatadog
 #   - lto = true (link-time optimization)
 #   - codegen-units = 1 (better optimization)
 #   - debug = "line-tables-only" (minimal debug info)
-print_gray "  Building release configuration..."
-cargo build --release -p libdd-profiling-ffi $CARGO_TARGET_ARG
+print_gray "  Building release configuration with $CARGO_CMD..."
+$CARGO_CMD build --release -p libdd-profiling-ffi $CARGO_TARGET_ARG
 if [ $? -ne 0 ]; then
     print_red "Error: Release build failed"
     exit 1
 fi
 
 # Build debug version
-print_gray "  Building debug configuration..."
-cargo build -p libdd-profiling-ffi $CARGO_TARGET_ARG
+print_gray "  Building debug configuration with $CARGO_CMD..."
+$CARGO_CMD build -p libdd-profiling-ffi $CARGO_TARGET_ARG
 if [ $? -ne 0 ]; then
     print_red "Error: Debug build failed"
     exit 1
