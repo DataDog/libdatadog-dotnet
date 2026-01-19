@@ -234,89 +234,121 @@ print_yellow "Packaging binaries..."
 PACKAGE_DIR="$OUTPUT_DIR/libdatadog-$PLATFORM"
 mkdir -p "$PACKAGE_DIR"
 
-# Create directory structure
+# Create Linux directory structure (matches original libdatadog)
 DIRS=(
-    "include"
-    "release/dynamic"
-    "release/static"
-    "debug/dynamic"
-    "debug/static"
+    "include/datadog"
+    "lib/pkgconfig"
+    "cmake"
 )
 
 for DIR in "${DIRS[@]}"; do
     mkdir -p "$PACKAGE_DIR/$DIR"
 done
 
-# Copy release artifacts
+# Copy release artifacts and rename to match original libdatadog naming
 print_gray "  Copying release artifacts..."
 
-# Dynamic build (shared library .so)
-cp "$RELEASE_DIR/libdatadog_profiling_ffi.so" "$PACKAGE_DIR/release/dynamic/" 2>/dev/null || {
+# Dynamic build (shared library .so) - rename to libdatadog_profiling.so
+if [ -f "$RELEASE_DIR/libdatadog_profiling_ffi.so" ]; then
+    cp "$RELEASE_DIR/libdatadog_profiling_ffi.so" "$PACKAGE_DIR/lib/libdatadog_profiling.so"
+
+    # Strip debug symbols into separate .debug file (matches original)
+    if command -v objcopy &> /dev/null; then
+        objcopy --only-keep-debug "$PACKAGE_DIR/lib/libdatadog_profiling.so" "$PACKAGE_DIR/lib/libdatadog_profiling.debug" 2>/dev/null || true
+        objcopy --strip-debug "$PACKAGE_DIR/lib/libdatadog_profiling.so" 2>/dev/null || true
+        objcopy --add-gnu-debuglink="$PACKAGE_DIR/lib/libdatadog_profiling.debug" "$PACKAGE_DIR/lib/libdatadog_profiling.so" 2>/dev/null || true
+    fi
+else
     print_yellow "  Warning: Release shared library (.so) not found"
-}
+fi
 
-# Static build (static library .a)
-cp "$RELEASE_DIR/libdatadog_profiling_ffi.a" "$PACKAGE_DIR/release/static/" 2>/dev/null || {
+# Static build (static library .a) - rename to libdatadog_profiling.a
+if [ -f "$RELEASE_DIR/libdatadog_profiling_ffi.a" ]; then
+    cp "$RELEASE_DIR/libdatadog_profiling_ffi.a" "$PACKAGE_DIR/lib/libdatadog_profiling.a"
+else
     print_yellow "  Warning: Release static library (.a) not found"
-}
+fi
 
-# Copy debug artifacts
-print_gray "  Copying debug artifacts..."
-
-# Dynamic build (shared library .so)
-cp "$DEBUG_DIR/libdatadog_profiling_ffi.so" "$PACKAGE_DIR/debug/dynamic/" 2>/dev/null || {
-    print_yellow "  Warning: Debug shared library (.so) not found"
-}
-
-# Static build (static library .a)
-cp "$DEBUG_DIR/libdatadog_profiling_ffi.a" "$PACKAGE_DIR/debug/static/" 2>/dev/null || {
-    print_yellow "  Warning: Debug static library (.a) not found"
-}
-
-# Copy or generate headers
+# Copy all headers from libdatadog
 print_gray "  Copying headers..."
 
-# Check common locations for generated headers
-HEADER_LOCATIONS=(
-    "libdatadog/target/include/datadog/profiling.h"
-    "libdatadog/libdd-profiling-ffi/datadog/profiling.h"
-    "libdatadog/include/datadog/profiling.h"
-)
+# Copy all datadog headers if they exist
+if [ -d "libdatadog/include/datadog" ]; then
+    cp -r libdatadog/include/datadog/* "$PACKAGE_DIR/include/datadog/" 2>/dev/null || true
+fi
 
-HEADER_FOUND=false
-for HEADER_PATH in "${HEADER_LOCATIONS[@]}"; do
-    if [ -f "$HEADER_PATH" ]; then
-        print_gray "  Found header at: $HEADER_PATH"
-        cp "$HEADER_PATH" "$PACKAGE_DIR/include/"
-        HEADER_FOUND=true
-        break
-    fi
-done
+# Also check target/include location
+if [ -d "libdatadog/target/include/datadog" ]; then
+    cp -r libdatadog/target/include/datadog/* "$PACKAGE_DIR/include/datadog/" 2>/dev/null || true
+fi
 
-if [ "$HEADER_FOUND" = false ]; then
-    print_yellow "  Warning: Header file not found in common locations. Attempting to generate..."
+# Ensure profiling.h exists (critical)
+if [ ! -f "$PACKAGE_DIR/include/datadog/profiling.h" ]; then
+    print_yellow "  Warning: profiling.h not found. Attempting to generate..."
     cd libdatadog/libdd-profiling-ffi
-
-    # Try to generate headers with cbindgen if available
     if command -v cbindgen &> /dev/null; then
-        cbindgen --output "$PACKAGE_DIR/include/profiling.h"
-        if [ $? -eq 0 ]; then
-            print_gray "  Generated header with cbindgen"
-            HEADER_FOUND=true
-        fi
+        cbindgen --output "$PACKAGE_DIR/include/datadog/profiling.h"
+        [ $? -eq 0 ] && print_gray "  Generated profiling.h with cbindgen"
     else
-        print_yellow "  Warning: cbindgen not found. Header files will be missing."
-        print_yellow "  Install cbindgen with: cargo install cbindgen"
+        print_yellow "  Warning: cbindgen not found. Install with: cargo install cbindgen"
     fi
-
     cd ../..
 fi
 
-# Copy license
-print_gray "  Copying license..."
+# Create pkg-config files
+print_gray "  Creating pkg-config files..."
+cat > "$PACKAGE_DIR/lib/pkgconfig/datadog_profiling.pc" << EOF
+prefix=\${pcfiledir}/../..
+libdir=\${prefix}/lib
+includedir=\${prefix}/include
+
+Name: datadog_profiling
+Description: Datadog profiling library (shared)
+Version: ${LIBDATADOG_VERSION#v}
+Libs: -L\${libdir} -ldatadog_profiling
+Cflags: -I\${includedir}
+EOF
+
+cat > "$PACKAGE_DIR/lib/pkgconfig/datadog_profiling-static.pc" << EOF
+prefix=\${pcfiledir}/../..
+libdir=\${prefix}/lib
+includedir=\${prefix}/include
+
+Name: datadog_profiling
+Description: Datadog profiling library (static)
+Version: ${LIBDATADOG_VERSION#v}
+Libs: -L\${libdir} -ldatadog_profiling
+Cflags: -I\${includedir}
+EOF
+
+# Create CMake config file
+print_gray "  Creating CMake config..."
+cat > "$PACKAGE_DIR/cmake/DatadogConfig.cmake" << 'EOF'
+# DatadogConfig.cmake
+get_filename_component(DATADOG_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+set(DATADOG_INCLUDE_DIRS "${DATADOG_CMAKE_DIR}/../include")
+set(DATADOG_LIBRARY_DIRS "${DATADOG_CMAKE_DIR}/../lib")
+set(DATADOG_LIBRARIES datadog_profiling)
+
+# Set up imported target
+add_library(Datadog::Profiling SHARED IMPORTED)
+set_target_properties(Datadog::Profiling PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${DATADOG_INCLUDE_DIRS}"
+    IMPORTED_LOCATION "${DATADOG_LIBRARY_DIRS}/libdatadog_profiling.so"
+)
+EOF
+
+# Copy license files
+print_gray "  Copying license files..."
 cp libdatadog/LICENSE "$PACKAGE_DIR/" 2>/dev/null || true
-cp libdatadog/LICENSE-3rdparty.csv "$PACKAGE_DIR/" 2>/dev/null || true
 cp libdatadog/NOTICE "$PACKAGE_DIR/" 2>/dev/null || true
+
+# Look for LICENSE-3rdparty in yml or csv format
+if [ -f "libdatadog/LICENSE-3rdparty.yml" ]; then
+    cp libdatadog/LICENSE-3rdparty.yml "$PACKAGE_DIR/"
+elif [ -f "libdatadog/LICENSE-3rdparty.csv" ]; then
+    cp libdatadog/LICENSE-3rdparty.csv "$PACKAGE_DIR/"
+fi
 
 print_green "Build complete!"
 print_gray "  Package directory: $PACKAGE_DIR"
