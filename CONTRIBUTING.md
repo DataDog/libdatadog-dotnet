@@ -4,30 +4,43 @@ This repository produces custom libdatadog binaries for the .NET SDK. This is pr
 
 ## Updating libdatadog Version
 
-To update to a new version of libdatadog:
+To build a new version of libdatadog, you have three options:
 
-1. Update `version.txt` with the new libdatadog git tag:
-   ```bash
-   echo "v25.1.0" > version.txt
-   git add version.txt
-   git commit -m "Update to libdatadog v25.1.0"
-   ```
+### Option 1: Build Latest Version (Recommended)
 
-2. Create a new release tag and push:
+1. Go to [Actions → Release](https://github.com/DataDog/libdatadog-dotnet/actions/workflows/release.yml)
+2. Click "Run workflow"
+3. Leave the version field **empty**
+4. The workflow automatically fetches and builds the latest libdatadog version
+
+### Option 2: Build Specific Version
+
+1. Go to [Actions → Release](https://github.com/DataDog/libdatadog-dotnet/actions/workflows/release.yml)
+2. Click "Run workflow"
+3. Enter the specific libdatadog version (e.g., `v25.1.0`)
+4. Useful for testing or pinning to a specific version
+
+### Option 3: Tag-Triggered Release
+
+1. Create and push a tag (builds latest libdatadog version):
    ```bash
    git tag v1.1.0
    git push origin main --tags
    ```
 
-3. GitHub Actions will automatically:
-   - Build the binaries from the specified libdatadog version
+2. GitHub Actions will automatically:
+   - Fetch the latest libdatadog version
+   - Build the binaries from that version
    - Create a GitHub release
    - Attach the built artifacts
    - Generate SHA512 hashes
 
-4. Update dd-trace-dotnet to use the new release:
-   - Update `build/vcpkg_local_ports/libdatadog/vcpkg.json` with the new version
-   - Update `build/vcpkg_local_ports/libdatadog/portfile.cmake` with the new SHA512 hashes from the release notes
+### Updating dd-trace-dotnet
+
+After a new release is created:
+
+1. Update `build/vcpkg_local_ports/libdatadog/vcpkg.json` with the new libdatadog-dotnet version
+2. Update `build/vcpkg_local_ports/libdatadog/portfile.cmake` with the new SHA512 hashes from the release notes
 
 ## Adding New Components
 
@@ -92,7 +105,7 @@ Get-FileHash output/libdatadog-x64-windows.zip -Algorithm SHA512
 
 ### Build fails with "crate not found"
 
-Make sure the libdatadog version in `version.txt` is a valid git tag in the libdatadog repository.
+Make sure the libdatadog version you specified (or the latest version fetched automatically) is a valid git tag in the libdatadog repository. You can check available versions at https://github.com/DataDog/libdatadog/tags
 
 ### Missing artifacts in output
 

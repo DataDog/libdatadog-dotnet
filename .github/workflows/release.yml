@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       libdatadog_version:
-        description: 'Libdatadog version to build (e.g., v25.0.0)'
-        required: true
-        default: 'v25.0.0'
+        description: 'Libdatadog version to build (e.g., v25.0.0). Leave empty to use latest from libdatadog repository.'
+        required: false
+        default: ''
 
 # Default permissions for all jobs (least privilege principle)
 permissions:
@@ -107,23 +107,35 @@ jobs:
 
       - name: Determine libdatadog version
         id: version
-        shell: pwsh
+        shell: bash
         env:
-          EVENT_NAME: ${{ github.event_name }}
           INPUT_VERSION: ${{ github.event.inputs.libdatadog_version }}
         run: |
-          if ($env:EVENT_NAME -eq "workflow_dispatch") {
-            $version = $env:INPUT_VERSION
-          } else {
-            # For tag pushes, read version from version.txt
-            if (Test-Path "version.txt") {
-              $version = (Get-Content "version.txt" -Raw).Trim()
-            } else {
-              $version = "v25.0.0"
-            }
-          }
-          "LIBDATADOG_VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          Write-Host "Building libdatadog version: $version"
+          # If input version is provided, use it
+          if [ -n "$INPUT_VERSION" ]; then
+            version="$INPUT_VERSION"
+            echo "Using specified libdatadog version: $version"
+          else
+            # Fetch latest version from libdatadog repository
+            echo "Fetching latest libdatadog version from repository..."
+            git ls-remote --tags --refs https://github.com/DataDog/libdatadog.git | \
+              grep -o 'refs/tags/v[0-9]*\.[0-9]*\.[0-9]*$' | \
+              sed 's|refs/tags/||' | \
+              sort -V | \
+              tail -n 1 > latest_version.txt
+
+            version=$(cat latest_version.txt)
+
+            if [ -z "$version" ]; then
+              echo "Error: Could not determine latest libdatadog version"
+              exit 1
+            fi
+
+            echo "Using latest libdatadog version: $version"
+          fi
+
+          echo "LIBDATADOG_VERSION=$version" >> $GITHUB_OUTPUT
+          echo "Building libdatadog version: $version"
 
       - name: Build ${{ matrix.platform }}
         env:

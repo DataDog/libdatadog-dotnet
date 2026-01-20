@@ -51,20 +51,26 @@ The build artifacts will be placed in the `output/` directory.
 
 ### Release Process
 
-Releases are automated via GitHub Actions. To create a new release:
+Releases are automated via GitHub Actions. There are three ways to trigger a release:
 
-1. Update the version in `version.txt`:
-   ```bash
-   echo "v25.1.0" > version.txt
-   ```
-2. Commit and create a tag:
-   ```bash
-   git add version.txt
-   git commit -m "Bump to libdatadog v25.1.0"
-   git tag v1.0.0
-   git push origin main --tags
-   ```
-3. GitHub Actions will build and publish release artifacts
+#### Option 1: Build Latest Version (Recommended)
+1. Go to [Actions → Release](https://github.com/DataDog/libdatadog-dotnet/actions/workflows/release.yml)
+2. Click "Run workflow"
+3. Leave the version field **empty**
+4. The workflow automatically fetches and builds the latest libdatadog version
+
+#### Option 2: Build Specific Version
+1. Go to [Actions → Release](https://github.com/DataDog/libdatadog-dotnet/actions/workflows/release.yml)
+2. Click "Run workflow"
+3. Enter a specific libdatadog version (e.g., `v25.0.0`)
+4. Useful for testing or pinning to a specific version
+
+#### Option 3: Tag-Triggered Build
+```bash
+git tag v1.0.0
+git push origin main --tags
+```
+Automatically builds the latest libdatadog version and publishes release artifacts
 
 ## Releases
 
@@ -80,11 +86,12 @@ Each release includes:
 
 ## Component Versions
 
-The libdatadog version is specified in `version.txt`. Current version: `v25.0.0`
+The libdatadog version is automatically determined at build time:
+- **Manual trigger with empty version:** Uses the latest version from libdatadog repository
+- **Manual trigger with specific version:** Uses the specified version (e.g., `v25.0.0`)
+- **Tag-triggered build:** Uses the latest version from libdatadog repository
 
-To update:
-1. Edit `version.txt` with the new libdatadog version (must be a valid git tag in the libdatadog repo)
-2. Create a new release (see Release Process above)
+This allows you to release anytime, even if libdatadog hasn't released yet.
 
 ## Integration with dd-trace-dotnet
 
@@ -110,7 +117,6 @@ libdatadog-dotnet/
 │   └── workflows/
 │       └── release.yml       # GitHub Actions workflow for releases
 ├── build.ps1                 # PowerShell build script
-├── version.txt               # Libdatadog version to build
 ├── .gitignore               # Git ignore rules
 ├── LICENSE                  # Apache 2.0 license
 └── README.md                # This file
