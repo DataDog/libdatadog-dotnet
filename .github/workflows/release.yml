@@ -55,11 +55,11 @@ jobs:
           - arch: x64
             platform: x86_64-apple-darwin
             target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-15-large  # Intel runner (macos-13 is deprecated)
           - arch: arm64
             platform: aarch64-apple-darwin
             target: aarch64-apple-darwin
-            os: macos-latest
+            os: macos-15  # ARM64 runner (Apple Silicon)
     outputs:
       libdatadog_version: ${{ steps.version.outputs.LIBDATADOG_VERSION }}
 
