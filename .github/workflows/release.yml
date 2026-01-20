@@ -97,6 +97,14 @@ jobs:
           # For cross-compiling between x86_64 and aarch64 on macOS
           rustup target add ${{ matrix.target }}
 
+      - name: Install LLVM tools (macOS only)
+        if: runner.os == 'macOS'
+        run: |
+          # Install LLVM for llvm-objcopy (needed to strip LLVM bitcode from .a files)
+          brew install llvm
+          # Add LLVM tools to PATH
+          echo "$(brew --prefix llvm)/bin" >> $GITHUB_PATH
+
       - name: Determine libdatadog version
         id: version
         shell: pwsh

@@ -317,14 +317,49 @@ print_gray "    Using tools: $OBJCOPY_CMD, $STRIP_CMD"
 
 # Step 1: Remove LLVM bitcode section from static library (reduces size significantly)
 if [ -f "$PACKAGE_DIR/lib/libdatadog_profiling.a" ]; then
-    if command -v $OBJCOPY_CMD &> /dev/null; then
-        print_gray "    Removing .llvmbc section from static library..."
-        $OBJCOPY_CMD --remove-section .llvmbc "$PACKAGE_DIR/lib/libdatadog_profiling.a" 2>/dev/null || {
-            print_yellow "    Warning: Failed to remove .llvmbc section (may not be available for this target)"
-        }
-    else
-        print_yellow "    Warning: $OBJCOPY_CMD not available, cannot optimize static library"
-    fi
+    case "$CARGO_BUILD_TARGET" in
+        *-apple-darwin)
+            # macOS: Remove __LLVM,__bitcode section using llvm-objcopy
+            # objcopy is not available on macOS, so we use llvm-objcopy
+            if command -v llvm-objcopy &> /dev/null; then
+                print_gray "    Removing LLVM bitcode from static library (macOS)..."
+                # Create temporary directory for extraction
+                TEMP_DIR=$(mktemp -d)
+                cd "$TEMP_DIR"
+
+                # Extract all object files from the archive
+                ar -x "$PACKAGE_DIR/lib/libdatadog_profiling.a"
+
+                # Remove __LLVM,__bitcode section from each object file
+                for obj in *.o; do
+                    llvm-objcopy --remove-section=__LLVM,__bitcode "$obj" 2>/dev/null || true
+                done
+
+                # Rebuild the archive
+                rm -f "$PACKAGE_DIR/lib/libdatadog_profiling.a"
+                ar -crs "$PACKAGE_DIR/lib/libdatadog_profiling.a" *.o
+
+                # Clean up
+                cd - > /dev/null
+                rm -rf "$TEMP_DIR"
+
+                print_gray "    LLVM bitcode removed successfully"
+            else
+                print_yellow "    Warning: llvm-objcopy not available, static library will be larger"
+            fi
+            ;;
+        *)
+            # Linux: Remove .llvmbc section using objcopy
+            if command -v $OBJCOPY_CMD &> /dev/null; then
+                print_gray "    Removing .llvmbc section from static library..."
+                $OBJCOPY_CMD --remove-section .llvmbc "$PACKAGE_DIR/lib/libdatadog_profiling.a" 2>/dev/null || {
+                    print_yellow "    Warning: Failed to remove .llvmbc section (may not be available for this target)"
+                }
+            else
+                print_yellow "    Warning: $OBJCOPY_CMD not available, cannot optimize static library"
+            fi
+            ;;
+    esac
 fi
 
 # Step 2-4: Platform-specific stripping
