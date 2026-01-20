@@ -6,6 +6,8 @@ param(
     [string]$LibdatadogVersion = "v25.0.0",
     [string]$OutputDir = "output",
     [string]$Platform = "x64-windows",
+    [ValidateSet("minimal", "standard", "full")]
+    [string]$Features = "minimal",
     [switch]$Clean
 )
 
@@ -14,7 +16,18 @@ $ErrorActionPreference = "Stop"
 Write-Host "Building libdatadog-dotnet" -ForegroundColor Cyan
 Write-Host "  Libdatadog version: $LibdatadogVersion" -ForegroundColor Gray
 Write-Host "  Platform: $Platform" -ForegroundColor Gray
+Write-Host "  Feature preset: $Features" -ForegroundColor Gray
 Write-Host "  Output directory: $OutputDir" -ForegroundColor Gray
+
+# Define feature sets
+$featureSets = @{
+    "minimal" = "ddcommon-ffi"  # Core profiling only (~4MB) - fastest build
+    "standard" = "ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,ddtelemetry-ffi"  # Most common features (~5-6MB)
+    "full" = "ddcommon-ffi,crashtracker-ffi,crashtracker-collector,crashtracker-receiver,demangler,ddtelemetry-ffi,data-pipeline-ffi,symbolizer,ddsketch-ffi,datadog-log-ffi,datadog-library-config-ffi,datadog-ffe-ffi"  # All features (~6.5MB) - matches original libdatadog
+}
+
+$featureFlags = $featureSets[$Features]
+Write-Host "  Features: $featureFlags" -ForegroundColor Gray
 
 # Check prerequisites
 try {
@@ -78,7 +91,7 @@ Push-Location libdatadog
 #   - codegen-units = 1 (better optimization)
 #   - debug = "line-tables-only" (minimal debug info)
 Write-Host "  Building release configuration..." -ForegroundColor Gray
-$releaseCmd = "cargo build --release -p libdd-profiling-ffi $cargoTargetArg"
+$releaseCmd = "cargo build --release -p libdd-profiling-ffi --features $featureFlags $cargoTargetArg"
 Invoke-Expression $releaseCmd
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Error: Release build failed" -ForegroundColor Red
@@ -88,7 +101,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # Build debug version
 Write-Host "  Building debug configuration..." -ForegroundColor Gray
-$debugCmd = "cargo build -p libdd-profiling-ffi $cargoTargetArg"
+$debugCmd = "cargo build -p libdd-profiling-ffi --features $featureFlags $cargoTargetArg"
 Invoke-Expression $debugCmd
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Error: Debug build failed" -ForegroundColor Red

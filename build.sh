@@ -8,6 +8,7 @@ set -e
 LIBDATADOG_VERSION="${1:-v25.0.0}"
 PLATFORM="${2:-x64-linux}"
 OUTPUT_DIR="${3:-output}"
+FEATURES="minimal"
 CLEAN=false
 
 # Parse command line arguments
@@ -25,6 +26,10 @@ while [[ $# -gt 0 ]]; do
             OUTPUT_DIR="$2"
             shift 2
             ;;
+        --features)
+            FEATURES="$2"
+            shift 2
+            ;;
         --clean)
             CLEAN=true
             shift
@@ -36,6 +41,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --version VERSION   Libdatadog version (default: v25.0.0)"
             echo "  --platform PLATFORM Target platform (default: x64-linux)"
             echo "  --output DIR        Output directory (default: output)"
+            echo "  --features PRESET   Feature preset: minimal, standard, or full (default: minimal)"
             echo "  --clean             Clean build directories before building"
             echo "  -h, --help          Show this help message"
             echo ""
@@ -88,7 +94,27 @@ print_green() {
 print_cyan "Building libdatadog-dotnet"
 print_gray "  Libdatadog version: $LIBDATADOG_VERSION"
 print_gray "  Platform: $PLATFORM"
+print_gray "  Feature preset: $FEATURES"
 print_gray "  Output directory: $OUTPUT_DIR"
+
+# Define feature sets
+case "$FEATURES" in
+    minimal)
+        FEATURE_FLAGS="ddcommon-ffi"  # Core profiling only (~4MB) - fastest build
+        ;;
+    standard)
+        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,ddtelemetry-ffi"  # Most common features (~5-6MB)
+        ;;
+    full)
+        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,crashtracker-receiver,demangler,ddtelemetry-ffi,data-pipeline-ffi,symbolizer,ddsketch-ffi,datadog-log-ffi,datadog-library-config-ffi,datadog-ffe-ffi"  # All features (~6.5MB) - matches original libdatadog
+        ;;
+    *)
+        print_red "Error: Invalid feature preset '$FEATURES'. Must be: minimal, standard, or full"
+        exit 1
+        ;;
+esac
+
+print_gray "  Features: $FEATURE_FLAGS"
 
 # Check prerequisites
 if ! command -v cargo &> /dev/null; then
@@ -199,7 +225,7 @@ fi
 #   - codegen-units = 1 (better optimization)
 #   - debug = "line-tables-only" (minimal debug info)
 print_gray "  Building release configuration with $CARGO_CMD..."
-$CARGO_CMD build --release -p libdd-profiling-ffi $CARGO_TARGET_ARG
+$CARGO_CMD build --release -p libdd-profiling-ffi --features "$FEATURE_FLAGS" $CARGO_TARGET_ARG
 if [ $? -ne 0 ]; then
     print_red "Error: Release build failed"
     exit 1

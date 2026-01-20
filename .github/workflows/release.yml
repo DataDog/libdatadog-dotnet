@@ -10,6 +10,15 @@ on:
         description: 'Libdatadog version to build (e.g., v25.0.0). Leave empty to use latest from libdatadog repository.'
         required: false
         default: ''
+      feature_preset:
+        description: 'Feature preset: minimal (profiling only, ~4MB), standard (with crashtracker/telemetry, ~5-6MB), or full (all features, ~6.5MB)'
+        required: false
+        default: 'minimal'
+        type: choice
+        options:
+          - minimal
+          - standard
+          - full
 
 # Default permissions for all jobs (least privilege principle)
 permissions:
@@ -141,13 +150,14 @@ jobs:
         env:
           LIBDATADOG_VERSION: ${{ steps.version.outputs.LIBDATADOG_VERSION }}
           CARGO_BUILD_TARGET: ${{ matrix.target }}
+          FEATURE_PRESET: ${{ github.event.inputs.feature_preset || 'minimal' }}
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
-            pwsh -Command "./build.ps1 -LibdatadogVersion '${LIBDATADOG_VERSION}' -Platform '${{ matrix.platform }}' -Clean -OutputDir 'output/libdatadog-${{ matrix.platform }}'"
+            pwsh -Command "./build.ps1 -LibdatadogVersion '${LIBDATADOG_VERSION}' -Platform '${{ matrix.platform }}' -Features '${FEATURE_PRESET}' -Clean -OutputDir 'output/libdatadog-${{ matrix.platform }}'"
           else
             chmod +x build.sh
             # For macOS, don't use cross tool - build natively or with native cargo cross-compilation
-            ./build.sh --version "$LIBDATADOG_VERSION" --platform "${{ matrix.platform }}" --clean --output "output/libdatadog-${{ matrix.platform }}"
+            ./build.sh --version "$LIBDATADOG_VERSION" --platform "${{ matrix.platform }}" --features "$FEATURE_PRESET" --clean --output "output/libdatadog-${{ matrix.platform }}"
           fi
         shell: bash
 
