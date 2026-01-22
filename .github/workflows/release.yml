@@ -125,22 +125,10 @@ jobs:
             version="$INPUT_VERSION"
             echo "Using specified libdatadog version: $version"
           else
-            # Fetch latest version from libdatadog repository
-            echo "Fetching latest libdatadog version from repository..."
-            git ls-remote --tags --refs https://github.com/DataDog/libdatadog.git | \
-              grep -o 'refs/tags/v[0-9]*\.[0-9]*\.[0-9]*$' | \
-              sed 's|refs/tags/||' | \
-              sort -V | \
-              tail -n 1 > latest_version.txt
-
-            version=$(cat latest_version.txt)
-
-            if [ -z "$version" ]; then
-              echo "Error: Could not determine latest libdatadog version"
-              exit 1
-            fi
-
-            echo "Using latest libdatadog version: $version"
+            # Use the main branch to get the latest code (not the latest release)
+            version="main"
+            echo "Using latest code from main branch (not latest release)"
+            echo "Using libdatadog version: $version"
           fi
 
           echo "LIBDATADOG_VERSION=$version" >> $GITHUB_OUTPUT
