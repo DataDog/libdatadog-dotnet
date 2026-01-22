@@ -51,26 +51,32 @@ The build artifacts will be placed in the `output/` directory.
 
 ### Release Process
 
-Releases are automated via GitHub Actions. There are three ways to trigger a release:
+Releases are automated via GitHub Actions. Go to [Actions → Release](https://github.com/DataDog/libdatadog-dotnet/actions/workflows/release.yml) and click "Run workflow".
 
-#### Option 1: Build Latest Version (Recommended)
-1. Go to [Actions → Release](https://github.com/DataDog/libdatadog-dotnet/actions/workflows/release.yml)
-2. Click "Run workflow"
-3. Leave the version field **empty**
-4. The workflow automatically fetches and builds the latest libdatadog version
+#### Build Without Release (Testing)
 
-#### Option 2: Build Specific Version
-1. Go to [Actions → Release](https://github.com/DataDog/libdatadog-dotnet/actions/workflows/release.yml)
-2. Click "Run workflow"
-3. Enter a specific libdatadog version (e.g., `v25.0.0`)
-4. Useful for testing or pinning to a specific version
+Build binaries without creating a GitHub release (useful for testing):
 
-#### Option 3: Tag-Triggered Build
-```bash
-git tag v1.0.0
-git push origin main --tags
-```
-Automatically builds the latest libdatadog version and publishes release artifacts
+**Parameters:**
+- **Libdatadog version**: Leave empty for latest code, or specify a version (e.g., `v26.0.0`)
+- **Release version**: Leave **empty** to skip release creation
+- **Feature preset**: Choose `minimal`, `standard`, or `full`
+
+The workflow will build artifacts that you can download from the workflow run.
+
+#### Build and Release
+
+Build binaries and create a GitHub release:
+
+**Parameters:**
+- **Libdatadog version**: Leave empty for latest code, or specify a version (e.g., `v26.0.0`)
+- **Release version**: Enter a version tag (e.g., `v1.2.0`) to create a release
+- **Feature preset**: Choose `minimal`, `standard`, or `full`
+
+The workflow will:
+- Build binaries for all platforms
+- Create a git tag with the specified version
+- Create a GitHub release with all artifacts and SHA512 hashes
 
 ## Releases
 
@@ -87,11 +93,11 @@ Each release includes:
 ## Component Versions
 
 The libdatadog version is automatically determined at build time:
-- **Manual trigger with empty version:** Uses the latest version from libdatadog repository
-- **Manual trigger with specific version:** Uses the specified version (e.g., `v25.0.0`)
-- **Tag-triggered build:** Uses the latest version from libdatadog repository
+- **Manual trigger with empty version:** Uses the latest code from the `main` branch (not the latest release)
+- **Manual trigger with specific version:** Uses the specified version tag or branch (e.g., `v26.0.0` or `main`)
+- **Tag-triggered build:** Uses the latest code from the `main` branch
 
-This allows you to release anytime, even if libdatadog hasn't released yet.
+This allows you to build and release the latest libdatadog code anytime, even if libdatadog hasn't released a new version yet.
 
 ## Integration with dd-trace-dotnet
 

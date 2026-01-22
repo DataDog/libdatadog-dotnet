@@ -4,36 +4,86 @@ This repository produces custom libdatadog binaries for the .NET SDK. This is pr
 
 ## Updating libdatadog Version
 
-To build a new version of libdatadog, you have three options:
+The workflow supports both building for testing and creating releases. You have several options:
 
-### Option 1: Build Latest Version (Recommended)
+### Option 1: Build Latest Code Without Release (Testing)
 
-1. Go to [Actions → Release](https://github.com/DataDog/libdatadog-dotnet/actions/workflows/release.yml)
-2. Click "Run workflow"
-3. Leave the version field **empty**
-4. The workflow automatically fetches and builds the latest libdatadog version
-
-### Option 2: Build Specific Version
+**Use case:** Test the latest libdatadog code before creating an official release.
 
 1. Go to [Actions → Release](https://github.com/DataDog/libdatadog-dotnet/actions/workflows/release.yml)
 2. Click "Run workflow"
-3. Enter the specific libdatadog version (e.g., `v25.1.0`)
-4. Useful for testing or pinning to a specific version
+3. Configure parameters:
+   - **Libdatadog version:** Leave **empty** (uses latest code from `main` branch)
+   - **Release version:** Leave **empty** (no release created)
+   - **Feature preset:** Select `minimal`, `standard`, or `full`
+4. The workflow builds artifacts without creating a release
+5. Download artifacts from the workflow run to test locally
 
-### Option 3: Tag-Triggered Release
+### Option 2: Build Specific libdatadog Version Without Release
 
-1. Create and push a tag (builds latest libdatadog version):
-   ```bash
-   git tag v1.1.0
-   git push origin main --tags
-   ```
+**Use case:** Test a specific libdatadog version before releasing.
 
-2. GitHub Actions will automatically:
-   - Fetch the latest libdatadog version
-   - Build the binaries from that version
+1. Go to [Actions → Release](https://github.com/DataDog/libdatadog-dotnet/actions/workflows/release.yml)
+2. Click "Run workflow"
+3. Configure parameters:
+   - **Libdatadog version:** Enter version (e.g., `v26.0.0`)
+   - **Release version:** Leave **empty**
+   - **Feature preset:** Select `minimal`, `standard`, or `full`
+
+### Option 3: Build and Release Latest Code
+
+**Use case:** Create a new libdatadog-dotnet release with the latest libdatadog code.
+
+1. Go to [Actions → Release](https://github.com/DataDog/libdatadog-dotnet/actions/workflows/release.yml)
+2. Click "Run workflow"
+3. Configure parameters:
+   - **Libdatadog version:** Leave **empty** (uses latest code from `main` branch)
+   - **Release version:** Enter release tag (e.g., `v1.2.0`)
+   - **Feature preset:** Select `minimal`, `standard`, or `full`
+4. The workflow will:
+   - Build artifacts from latest libdatadog code
+   - Create the specified git tag
    - Create a GitHub release
-   - Attach the built artifacts
+   - Attach all built artifacts
    - Generate SHA512 hashes
+
+### Option 4: Build and Release Specific libdatadog Version
+
+**Use case:** Create a new libdatadog-dotnet release with a specific libdatadog version.
+
+1. Go to [Actions → Release](https://github.com/DataDog/libdatadog-dotnet/actions/workflows/release.yml)
+2. Click "Run workflow"
+3. Configure parameters:
+   - **Libdatadog version:** Enter version (e.g., `v26.0.0`)
+   - **Release version:** Enter release tag (e.g., `v1.2.0`)
+   - **Feature preset:** Select `minimal`, `standard`, or `full`
+
+## Workflow Parameters
+
+The release workflow accepts the following parameters:
+
+### Libdatadog Version
+- **Empty (default):** Uses the latest code from libdatadog's `main` branch
+- **Specific version tag:** Uses that tagged version (e.g., `v26.0.0`)
+- **Branch name:** Can specify any branch (e.g., `main`, `feature-branch`)
+
+This parameter controls which libdatadog code is built into the binaries.
+
+### Release Version
+- **Empty (default):** Builds artifacts only, no release created
+- **Semantic version tag:** Creates a GitHub release with that tag (e.g., `v1.2.0`)
+
+Must follow the format `vX.Y.Z` where X, Y, Z are numbers. The workflow will:
+- Validate the format
+- Create the tag if it doesn't exist
+- Create a GitHub release
+- Upload all build artifacts
+
+### Feature Preset
+Controls which libdatadog components are included:
+- **minimal (default):** Profiling only (~4MB) - fastest build
+- **standard:** Profiling + crashtracker + telemetry (~5-6MB)
+- **full:** All available components (~6.5MB)
 
 ### Updating dd-trace-dotnet
 
@@ -105,15 +155,34 @@ Get-FileHash output/libdatadog-x64-windows.zip -Algorithm SHA512
 
 ### Build fails with "crate not found"
 
-Make sure the libdatadog version you specified (or the latest version fetched automatically) is a valid git tag in the libdatadog repository. You can check available versions at https://github.com/DataDog/libdatadog/tags
+Make sure the libdatadog version you specified is valid:
+- If empty: Builds from `main` branch (always available)
+- If specific version: Must be a valid git tag or branch in the libdatadog repository
+- Check available versions at https://github.com/DataDog/libdatadog/tags
+
+### Release creation fails with "invalid format"
+
+The `release_version` parameter must follow semantic versioning: `vX.Y.Z`
+- ✅ Valid: `v1.2.0`, `v2.0.0`, `v1.10.5`
+- ❌ Invalid: `1.2.0` (missing 'v'), `v1.2` (missing patch), `v1.2.0-beta` (no pre-release tags)
 
 ### Missing artifacts in output
 
-Check that the libdatadog build succeeded and that the artifact paths in `build.ps1` match the actual output locations.
+Check that the libdatadog build succeeded and that the artifact paths in `build.ps1` or `build.sh` match the actual output locations.
 
 ### SHA512 mismatch in dd-trace-dotnet
 
 Ensure you're using the exact SHA512 hash from the release notes, not from a local build.
+
+### Tag already exists error
+
+If you're trying to create a release with a tag that already exists:
+1. Choose a different release version number
+2. Or delete the existing tag first:
+   ```bash
+   git tag -d v1.2.0
+   git push origin :refs/tags/v1.2.0
+   ```
 
 ## Release Versioning
 
