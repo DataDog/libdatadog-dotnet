@@ -91,7 +91,8 @@ Push-Location libdatadog
 #   - codegen-units = 1 (better optimization)
 #   - debug = "line-tables-only" (minimal debug info)
 Write-Host "  Building release configuration..." -ForegroundColor Gray
-$releaseCmd = "cargo build --release -p libdd-profiling-ffi --features $featureFlags $cargoTargetArg"
+$releaseCmd = "cargo build --release -p libdd-profiling-ffi --features `"$featureFlags`" $cargoTargetArg"
+Write-Host "  Running: $releaseCmd" -ForegroundColor DarkGray
 Invoke-Expression $releaseCmd
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Error: Release build failed" -ForegroundColor Red
@@ -101,7 +102,8 @@ if ($LASTEXITCODE -ne 0) {
 
 # Build debug version
 Write-Host "  Building debug configuration..." -ForegroundColor Gray
-$debugCmd = "cargo build -p libdd-profiling-ffi --features $featureFlags $cargoTargetArg"
+$debugCmd = "cargo build -p libdd-profiling-ffi --features `"$featureFlags`" $cargoTargetArg"
+Write-Host "  Running: $debugCmd" -ForegroundColor DarkGray
 Invoke-Expression $debugCmd
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Error: Debug build failed" -ForegroundColor Red
@@ -192,25 +194,35 @@ $headerDirFound = $false
 
 # Check release build location
 $releaseHeaderPath = "$ReleaseDir/include/datadog"
+Write-Host "  Checking for headers in: $releaseHeaderPath" -ForegroundColor DarkGray
 if (Test-Path $releaseHeaderPath) {
     Write-Host "  Found headers in $releaseHeaderPath" -ForegroundColor Gray
+    Get-ChildItem $releaseHeaderPath -File | ForEach-Object { Write-Host "    - $($_.Name)" -ForegroundColor DarkGray }
     Copy-Item "$releaseHeaderPath/*" -Destination "$PackageDir/include/datadog/" -Recurse -Force -ErrorAction SilentlyContinue
     $headerDirFound = $true
+} else {
+    Write-Host "  Headers NOT found in $releaseHeaderPath" -ForegroundColor Yellow
 }
 
 # Check debug build location
 $debugHeaderPath = "$DebugDir/include/datadog"
+Write-Host "  Checking for headers in: $debugHeaderPath" -ForegroundColor DarkGray
 if (Test-Path $debugHeaderPath) {
     Write-Host "  Found headers in $debugHeaderPath" -ForegroundColor Gray
+    Get-ChildItem $debugHeaderPath -File | ForEach-Object { Write-Host "    - $($_.Name)" -ForegroundColor DarkGray }
     Copy-Item "$debugHeaderPath/*" -Destination "$PackageDir/include/datadog/" -Recurse -Force -ErrorAction SilentlyContinue
     $headerDirFound = $true
+} else {
+    Write-Host "  Headers NOT found in $debugHeaderPath" -ForegroundColor Yellow
 }
 
 # Verify profiling.h exists (critical)
 if (-not (Test-Path "$PackageDir/include/datadog/profiling.h")) {
     Write-Host "  Error: profiling.h not found after build. Headers were not generated." -ForegroundColor Red
     Write-Host "  This usually means the cbindgen feature wasn't enabled during build." -ForegroundColor Red
-    Write-Host "  Please ensure the build completed successfully." -ForegroundColor Red
+    Write-Host "  Checked locations:" -ForegroundColor Red
+    Write-Host "    - $releaseHeaderPath" -ForegroundColor Red
+    Write-Host "    - $debugHeaderPath" -ForegroundColor Red
 }
 
 # Copy license
