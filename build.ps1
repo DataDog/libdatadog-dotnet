@@ -21,9 +21,9 @@ Write-Host "  Output directory: $OutputDir" -ForegroundColor Gray
 
 # Define feature sets
 $featureSets = @{
-    "minimal" = "ddcommon-ffi"  # Core profiling only (~4MB) - fastest build
-    "standard" = "ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,ddtelemetry-ffi"  # Most common features (~5-6MB)
-    "full" = "ddcommon-ffi,crashtracker-ffi,crashtracker-collector,crashtracker-receiver,demangler,ddtelemetry-ffi,data-pipeline-ffi,symbolizer,ddsketch-ffi,datadog-log-ffi,datadog-library-config-ffi,datadog-ffe-ffi"  # All features (~6.5MB) - matches original libdatadog
+    "minimal" = "ddcommon-ffi,cbindgen"  # Core profiling only (~4MB) - fastest build
+    "standard" = "ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,ddtelemetry-ffi,cbindgen"  # Most common features (~5-6MB)
+    "full" = "ddcommon-ffi,crashtracker-ffi,crashtracker-collector,crashtracker-receiver,demangler,ddtelemetry-ffi,data-pipeline-ffi,symbolizer,ddsketch-ffi,datadog-log-ffi,datadog-library-config-ffi,datadog-ffe-ffi,cbindgen"  # All features (~6.5MB) - matches original libdatadog
 }
 
 $featureFlags = $featureSets[$Features]
@@ -184,42 +184,33 @@ if (Test-Path "$DebugDir/datadog_profiling_ffi.lib") {
 # Copy all headers from libdatadog
 Write-Host "  Copying headers..." -ForegroundColor Gray
 
-# Check common locations for header directory
+# Headers are generated during build with cbindgen feature to:
+# target/{architecture}/{profile}/include/datadog/
+# We check both release and debug locations
+
 $headerDirFound = $false
 
-# First check libdatadog/include/datadog
-if (Test-Path "libdatadog/include/datadog") {
-    Write-Host "  Found headers in libdatadog/include/datadog" -ForegroundColor Gray
-    Copy-Item "libdatadog/include/datadog/*" -Destination "$PackageDir/include/datadog/" -Recurse -Force -ErrorAction SilentlyContinue
+# Check release build location
+$releaseHeaderPath = "$ReleaseDir/include/datadog"
+if (Test-Path $releaseHeaderPath) {
+    Write-Host "  Found headers in $releaseHeaderPath" -ForegroundColor Gray
+    Copy-Item "$releaseHeaderPath/*" -Destination "$PackageDir/include/datadog/" -Recurse -Force -ErrorAction SilentlyContinue
     $headerDirFound = $true
 }
 
-# Also check target/include/datadog location
-if (Test-Path "libdatadog/target/include/datadog") {
-    Write-Host "  Found headers in libdatadog/target/include/datadog" -ForegroundColor Gray
-    Copy-Item "libdatadog/target/include/datadog/*" -Destination "$PackageDir/include/datadog/" -Recurse -Force -ErrorAction SilentlyContinue
+# Check debug build location
+$debugHeaderPath = "$DebugDir/include/datadog"
+if (Test-Path $debugHeaderPath) {
+    Write-Host "  Found headers in $debugHeaderPath" -ForegroundColor Gray
+    Copy-Item "$debugHeaderPath/*" -Destination "$PackageDir/include/datadog/" -Recurse -Force -ErrorAction SilentlyContinue
     $headerDirFound = $true
 }
 
-# Ensure profiling.h exists (critical)
+# Verify profiling.h exists (critical)
 if (-not (Test-Path "$PackageDir/include/datadog/profiling.h")) {
-    Write-Host "  Warning: profiling.h not found. Attempting to generate..." -ForegroundColor Yellow
-    Push-Location libdatadog/libdd-profiling-ffi
-
-    # Try to generate headers with cbindgen if available
-    try {
-        $null = Get-Command cbindgen -ErrorAction Stop
-        cbindgen --output "$PackageDir/include/datadog/profiling.h"
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "  Generated profiling.h with cbindgen" -ForegroundColor Gray
-            $headerDirFound = $true
-        }
-    } catch {
-        Write-Host "  Warning: cbindgen not found. Header files will be missing." -ForegroundColor Yellow
-        Write-Host "  Install cbindgen with: cargo install cbindgen" -ForegroundColor Yellow
-    }
-
-    Pop-Location
+    Write-Host "  Error: profiling.h not found after build. Headers were not generated." -ForegroundColor Red
+    Write-Host "  This usually means the cbindgen feature wasn't enabled during build." -ForegroundColor Red
+    Write-Host "  Please ensure the build completed successfully." -ForegroundColor Red
 }
 
 # Copy license
