@@ -312,6 +312,7 @@ jobs:
         run: |
           cat > release-notes.md << 'NOTES_EOF'
           SHA256 checksums
+          ```          
           ${{ steps.create_archives.outputs.SHA256_MACOS_ARM64 }} libdatadog-aarch64-apple-darwin.tar.gz
           ${{ steps.create_archives.outputs.SHA256_LINUX_ARM64_MUSL }} libdatadog-aarch64-alpine-linux-musl.tar.gz
           ${{ steps.create_archives.outputs.SHA256_LINUX_ARM64_GNU }} libdatadog-aarch64-unknown-linux-gnu.tar.gz
@@ -320,7 +321,9 @@ jobs:
           ${{ steps.create_archives.outputs.SHA256_MACOS_X64 }} libdatadog-x86_64-apple-darwin.tar.gz
           ${{ steps.create_archives.outputs.SHA256_LINUX_X64_MUSL }} libdatadog-x86_64-alpine-linux-musl.tar.gz
           ${{ steps.create_archives.outputs.SHA256_LINUX_X64_GNU }} libdatadog-x86_64-unknown-linux-gnu.tar.gz
+          ```
           SHA512 checksums
+          ```
           ${{ steps.create_archives.outputs.SHA512_MACOS_ARM64 }} libdatadog-aarch64-apple-darwin.tar.gz
           ${{ steps.create_archives.outputs.SHA512_LINUX_ARM64_MUSL }} libdatadog-aarch64-alpine-linux-musl.tar.gz
           ${{ steps.create_archives.outputs.SHA512_LINUX_ARM64_GNU }} libdatadog-aarch64-unknown-linux-gnu.tar.gz
@@ -329,6 +332,7 @@ jobs:
           ${{ steps.create_archives.outputs.SHA512_MACOS_X64 }} libdatadog-x86_64-apple-darwin.tar.gz
           ${{ steps.create_archives.outputs.SHA512_LINUX_X64_MUSL }} libdatadog-x86_64-alpine-linux-musl.tar.gz
           ${{ steps.create_archives.outputs.SHA512_LINUX_X64_GNU }} libdatadog-x86_64-unknown-linux-gnu.tar.gz
+          ```
           NOTES_EOF
 
           echo "Release notes created:"
