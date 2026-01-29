@@ -129,7 +129,7 @@ New-Item -ItemType Directory -Force -Path $PackageDir | Out-Null
 
 # Create directory structure
 $Dirs = @(
-    "include",
+    "include/datadog",
     "release/dynamic",
     "release/static",
     "debug/dynamic",
@@ -181,44 +181,44 @@ if (Test-Path "$DebugDir/datadog_profiling_ffi.lib") {
     Write-Host "  Warning: Debug static library (.lib) not found" -ForegroundColor Yellow
 }
 
-# Copy or generate headers
+# Copy all headers from libdatadog
 Write-Host "  Copying headers..." -ForegroundColor Gray
 
-# Check common locations for generated headers
-$headerLocations = @(
-    "libdatadog/target/include/datadog/profiling.h",
-    "libdatadog/libdd-profiling-ffi/datadog/profiling.h",
-    "libdatadog/include/datadog/profiling.h"
-)
+# Check common locations for header directory
+$headerDirFound = $false
 
-$headerFound = $false
-foreach ($headerPath in $headerLocations) {
-    if (Test-Path $headerPath) {
-        Write-Host "  Found header at: $headerPath" -ForegroundColor Gray
-        $headerDir = Split-Path $headerPath -Parent
-        Copy-Item $headerPath -Destination "$PackageDir/include/" -ErrorAction Stop
-        $headerFound = $true
-        break
-    }
+# First check libdatadog/include/datadog
+if (Test-Path "libdatadog/include/datadog") {
+    Write-Host "  Found headers in libdatadog/include/datadog" -ForegroundColor Gray
+    Copy-Item "libdatadog/include/datadog/*" -Destination "$PackageDir/include/datadog/" -Recurse -Force -ErrorAction SilentlyContinue
+    $headerDirFound = $true
 }
 
-if (-not $headerFound) {
-    Write-Host "  Warning: Header file not found in common locations. Attempting to generate..." -ForegroundColor Yellow
+# Also check target/include/datadog location
+if (Test-Path "libdatadog/target/include/datadog") {
+    Write-Host "  Found headers in libdatadog/target/include/datadog" -ForegroundColor Gray
+    Copy-Item "libdatadog/target/include/datadog/*" -Destination "$PackageDir/include/datadog/" -Recurse -Force -ErrorAction SilentlyContinue
+    $headerDirFound = $true
+}
+
+# Ensure profiling.h exists (critical)
+if (-not (Test-Path "$PackageDir/include/datadog/profiling.h")) {
+    Write-Host "  Warning: profiling.h not found. Attempting to generate..." -ForegroundColor Yellow
     Push-Location libdatadog/libdd-profiling-ffi
-    
+
     # Try to generate headers with cbindgen if available
     try {
         $null = Get-Command cbindgen -ErrorAction Stop
-        cbindgen --output "$PackageDir/include/profiling.h"
+        cbindgen --output "$PackageDir/include/datadog/profiling.h"
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "  Generated header with cbindgen" -ForegroundColor Gray
-            $headerFound = $true
+            Write-Host "  Generated profiling.h with cbindgen" -ForegroundColor Gray
+            $headerDirFound = $true
         }
     } catch {
         Write-Host "  Warning: cbindgen not found. Header files will be missing." -ForegroundColor Yellow
         Write-Host "  Install cbindgen with: cargo install cbindgen" -ForegroundColor Yellow
     }
-    
+
     Pop-Location
 }
 
