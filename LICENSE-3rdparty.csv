@@ -1,0 +1,482 @@
+Component,Origin,License,Copyright
+addr2line 0.24.2,https://github.com/gimli-rs/addr2line,Apache-2.0 OR MIT,owner or entity authorized by
+adler2 2.0.1,https://github.com/oyvindln/adler2,0BSD OR MIT OR Apache-2.0,Jonas Schievink 
+aes 0.8.4,https://github.com/RustCrypto/block-ciphers,MIT OR Apache-2.0,Artyom Pavlov
+ahash 0.8.12,https://github.com/tkaitchuck/ahash,MIT OR Apache-2.0,Tom Kaitchuck
+aho-corasick 1.1.4,https://github.com/BurntSushi/aho-corasick,Unlicense OR MIT,"laws, the author or authors"
+allocator-api2 0.2.21,https://github.com/zakarumych/allocator-api2,MIT OR Apache-2.0,notice and this permission notice
+android_system_properties 0.1.5,https://github.com/nical/android_system_properties,MIT/Apache-2.0,Nicolas Silva
+anstream 0.6.21,https://github.com/rust-cli/anstyle.git,MIT OR Apache-2.0,Individual contributors
+anstyle 1.0.13,https://github.com/rust-cli/anstyle.git,MIT OR Apache-2.0,Individual contributors
+anstyle-parse 0.2.7,https://github.com/rust-cli/anstyle.git,MIT OR Apache-2.0,Individual contributors
+anstyle-query 1.1.5,https://github.com/rust-cli/anstyle.git,MIT OR Apache-2.0,Individual contributors
+anstyle-wincon 3.0.11,https://github.com/rust-cli/anstyle.git,MIT OR Apache-2.0,Individual contributors
+anyhow 1.0.100,https://github.com/dtolnay/anyhow,MIT OR Apache-2.0,notice and this permission notice
+arbitrary 1.4.2,https://github.com/rust-fuzz/arbitrary/,MIT OR Apache-2.0,Manish Goregaokar
+arc-swap 1.7.1,https://github.com/vorner/arc-swap,MIT OR Apache-2.0,arc-swap developers
+arrayref 0.3.9,https://github.com/droundy/arrayref,BSD-2-Clause,David Roundy 
+assert-json-diff 2.0.2,https://github.com/davidpdrsn/assert-json-diff.git,MIT,David Pedersen
+async-lock 3.4.1,https://github.com/smol-rs/async-lock,Apache-2.0 OR MIT,owner or entity authorized by
+async-object-pool 0.2.0,https://github.com/alexliesenfeld/async-object-pool,MIT,Alexander Liesenfeld
+async-trait 0.1.89,https://github.com/dtolnay/async-trait,MIT OR Apache-2.0,notice and this permission notice
+atomic-waker 1.1.2,https://github.com/smol-rs/atomic-waker,Apache-2.0 OR MIT,owner or entity authorized by
+aws-lc-rs 1.15.0,https://github.com/aws/aws-lc-rs,ISC AND (Apache-2.0 OR ISC),owner or entity authorized by
+aws-lc-sys 0.33.0,https://github.com/aws/aws-lc-rs,ISC AND (Apache-2.0 OR ISC) AND OpenSSL,The OpenSSL Project.  All rights reserved.
+backtrace 0.3.74,https://github.com/rust-lang/backtrace-rs,MIT OR Apache-2.0,Alex Crichton
+base64 0.22.1,https://github.com/marshallpierce/rust-base64,MIT OR Apache-2.0,Alice Maz
+bincode 1.3.3,https://github.com/servo/bincode,MIT,Ty Overby
+bitflags 2.10.0,https://github.com/bitflags/bitflags,MIT OR Apache-2.0,The Rust Project Developers
+bitmaps 3.2.1,https://github.com/bodil/bitmaps,MPL-2.0+,
+blazesym 0.2.0-rc.5,https://github.com/libbpf/blazesym,BSD-3-Clause,All rights reserved.
+blazesym-c 0.1.4,https://github.com/libbpf/blazesym,BSD-3-Clause,All rights reserved.
+block-buffer 0.10.4,https://github.com/RustCrypto/utils,MIT OR Apache-2.0,The RustCrypto Project Developers
+block2 0.6.2,https://github.com/madsmtm/objc2,MIT,
+bolero 0.13.4,https://github.com/camshaft/bolero,MIT,
+bolero-afl 0.13.0,https://github.com/camshaft/bolero,MIT,
+bolero-engine 0.13.4,https://github.com/camshaft/bolero,MIT,
+bolero-generator 0.13.5,https://github.com/camshaft/bolero,MIT,
+bolero-generator-derive 0.13.4,https://github.com/camshaft/bolero,MIT,
+bolero-honggfuzz 0.13.0,https://github.com/camshaft/bolero,MIT,
+bolero-kani 0.13.0,https://github.com/camshaft/bolero,MIT,
+bolero-libfuzzer 0.13.0,https://github.com/camshaft/bolero,MIT,
+bumpalo 3.19.0,https://github.com/fitzgen/bumpalo,MIT OR Apache-2.0,Nick Fitzgerald
+byteorder 1.5.0,https://github.com/BurntSushi/byteorder,Unlicense OR MIT,"laws, the author or authors"
+bytes 1.10.1,https://github.com/tokio-rs/bytes,MIT,Carl Lerche
+bzip2 0.6.1,https://github.com/trifectatechfoundation/bzip2-rs,MIT OR Apache-2.0,Alex Crichton and Contributors
+cadence 1.6.0,https://github.com/56quarters/cadence,Apache-2.0/MIT,
+camino 1.2.1,https://github.com/camino-rs/camino,MIT OR Apache-2.0,notice and this permission notice
+cargo-platform 0.1.7,https://github.com/rust-lang/cargo,MIT OR Apache-2.0,notice and this permission notice
+cargo_metadata 0.18.1,https://github.com/oli-obk/cargo_metadata,MIT,notice and this permission notice
+cbindgen 0.29.2,https://github.com/mozilla/cbindgen,MPL-2.0,"doctrines of fair use, fair dealing, or other"
+cc 1.2.45,https://github.com/rust-lang/cc-rs,MIT OR Apache-2.0,Alex Crichton
+cfg-if 1.0.4,https://github.com/rust-lang/cfg-if,MIT OR Apache-2.0,Alex Crichton
+chrono 0.4.42,https://github.com/chronotope/chrono,MIT OR Apache-2.0,"2014--2025, Kang Seonghoon and"
+cipher 0.4.4,https://github.com/RustCrypto/traits,MIT OR Apache-2.0,RustCrypto Developers
+clap 4.5.51,https://github.com/clap-rs/clap,MIT OR Apache-2.0,Individual contributors
+clap_builder 4.5.51,https://github.com/clap-rs/clap,MIT OR Apache-2.0,Individual contributors
+clap_derive 4.5.49,https://github.com/clap-rs/clap,MIT OR Apache-2.0,Individual contributors
+clap_lex 0.7.6,https://github.com/clap-rs/clap,MIT OR Apache-2.0,Individual contributors
+cmake 0.1.54,https://github.com/rust-lang/cmake-rs,MIT OR Apache-2.0,Alex Crichton
+colorchoice 1.0.4,https://github.com/rust-cli/anstyle.git,MIT OR Apache-2.0,Individual contributors
+common-multipart-rfc7578 0.7.0,https://github.com/ferristseng/rust-multipart-rfc7578,MIT OR Apache-2.0,
+concurrent-queue 2.5.0,https://github.com/smol-rs/concurrent-queue,Apache-2.0 OR MIT,owner or entity authorized by
+const_format 0.2.35,https://github.com/rodrimati1992/const_format_crates/,Zlib,Matias Rodriguez.
+const_format_proc_macros 0.2.34,https://github.com/rodrimati1992/const_format_crates/,Zlib,Matias Rodriguez.
+constant_time_eq 0.3.1,https://github.com/cesarb/constant_time_eq,CC0-1.0 OR MIT-0 OR Apache-2.0,
+constcat 0.4.1,https://github.com/rossmacarthur/constcat,MIT OR Apache-2.0,notice and this permission notice shall be included in all
+core-foundation 0.10.1,https://github.com/servo/core-foundation-rs,MIT OR Apache-2.0,Mozilla Foundation
+core-foundation-sys 0.8.7,https://github.com/servo/core-foundation-rs,MIT OR Apache-2.0,Mozilla Foundation
+cpp_demangle 0.4.5,https://github.com/gimli-rs/cpp_demangle,MIT OR Apache-2.0,The Rust Project Developers
+cpufeatures 0.2.17,https://github.com/RustCrypto/utils,MIT OR Apache-2.0,The RustCrypto Project Developers
+crc32fast 1.5.0,https://github.com/srijs/rust-crc32fast,MIT OR Apache-2.0,"Sam Rijs, Alex Crichton and contributors"
+crossbeam-channel 0.5.15,https://github.com/crossbeam-rs/crossbeam,MIT OR Apache-2.0,The Crossbeam Project Developers
+crossbeam-queue 0.3.12,https://github.com/crossbeam-rs/crossbeam,MIT OR Apache-2.0,The Crossbeam Project Developers
+crossbeam-utils 0.8.21,https://github.com/crossbeam-rs/crossbeam,MIT OR Apache-2.0,The Crossbeam Project Developers
+crypto-common 0.1.7,https://github.com/RustCrypto/traits,MIT OR Apache-2.0,RustCrypto Developers
+current_platform 0.2.0,https://github.com/Shnatsel/current_platform,MIT OR Apache-2.0 OR Zlib,notice and this permission notice shall be included in all copies or substantial portions of the Sof
+darling 0.21.3,https://github.com/TedDriggs/darling,MIT,Ted Driggs
+darling_core 0.21.3,https://github.com/TedDriggs/darling,MIT,Ted Driggs
+darling_macro 0.21.3,https://github.com/TedDriggs/darling,MIT,Ted Driggs
+debugid 0.8.0,https://github.com/getsentry/rust-debugid,Apache-2.0,owner or entity authorized by
+deflate64 0.1.10,https://github.com/anatawa12/deflate64-rs,MIT,.NET Foundation and Contributors
+deranged 0.5.5,https://github.com/jhpratt/deranged,MIT OR Apache-2.0,Jacob Pratt et al.
+derive_arbitrary 1.4.2,https://github.com/rust-fuzz/arbitrary,MIT OR Apache-2.0,Manish Goregaokar
+derive_more 2.0.1,https://github.com/JelteF/derive_more,MIT,Jelte Fennema
+derive_more-impl 2.0.1,https://github.com/JelteF/derive_more,MIT,Jelte Fennema
+digest 0.10.7,https://github.com/RustCrypto/traits,MIT OR Apache-2.0,Artyom Pavlov
+dispatch2 0.3.0,https://github.com/madsmtm/objc2,Zlib OR Apache-2.0 OR MIT,
+displaydoc 0.2.5,https://github.com/yaahc/displaydoc,MIT OR Apache-2.0,notice and this permission notice
+dyn-clone 1.0.20,https://github.com/dtolnay/dyn-clone,MIT OR Apache-2.0,notice and this permission notice
+educe 0.4.23,https://github.com/magiclen/educe,MIT,magiclen.org (Ron Li)
+either 1.15.0,https://github.com/rayon-rs/either,MIT OR Apache-2.0,"Permission is hereby granted, free of charge, to any"
+enum-ordinalize 3.1.15,https://github.com/magiclen/enum-ordinalize,MIT,magiclen.org (Ron Li)
+equivalent 1.0.2,https://github.com/indexmap-rs/equivalent,Apache-2.0 OR MIT,owner or entity authorized by
+erased-serde 0.4.9,https://github.com/dtolnay/erased-serde,MIT OR Apache-2.0,notice and this permission notice
+errno 0.3.14,https://github.com/lambda-fairy/rust-errno,MIT OR Apache-2.0,Chris Wong
+event-listener 5.4.1,https://github.com/smol-rs/event-listener,Apache-2.0 OR MIT,owner or entity authorized by
+event-listener-strategy 0.5.4,https://github.com/smol-rs/event-listener-strategy,Apache-2.0 OR MIT,owner or entity authorized by
+fallible-iterator 0.3.0,https://github.com/sfackler/rust-fallible-iterator,MIT/Apache-2.0,The rust-openssl-verify Developers
+fastrand 2.3.0,https://github.com/smol-rs/fastrand,Apache-2.0 OR MIT,owner or entity authorized by
+faststr 0.2.32,https://github.com/volo-rs/faststr,MIT OR Apache-2.0,Volo Contributors
+filetime 0.2.26,https://github.com/alexcrichton/filetime,MIT/Apache-2.0,Alex Crichton
+find-msvc-tools 0.1.4,https://github.com/rust-lang/cc-rs,MIT OR Apache-2.0,Alex Crichton
+flate2 1.1.5,https://github.com/rust-lang/flate2-rs,MIT OR Apache-2.0,Alex Crichton
+float-cmp 0.10.0,https://github.com/mikedilger/float-cmp,MIT,Optimal Computing (NZ) Ltd
+fnv 1.0.7,https://github.com/servo/rust-fnv,Apache-2.0 / MIT,owner or entity authorized by
+foldhash 0.1.5,https://github.com/orlp/foldhash,Zlib,Orson Peters
+form_urlencoded 1.2.2,https://github.com/servo/rust-url,MIT OR Apache-2.0,The rust-url developers
+function_name 0.3.0,https://github.com/danielhenrymantilla/rust-function_name,MIT,Daniel Henry-Mantilla
+function_name-proc-macro 0.3.0,https://github.com/danielhenrymantilla/rust-function_name,MIT,
+futures 0.3.31,https://github.com/rust-lang/futures-rs,MIT OR Apache-2.0,Alex Crichton
+futures-channel 0.3.31,https://github.com/rust-lang/futures-rs,MIT OR Apache-2.0,Alex Crichton
+futures-core 0.3.31,https://github.com/rust-lang/futures-rs,MIT OR Apache-2.0,Alex Crichton
+futures-executor 0.3.31,https://github.com/rust-lang/futures-rs,MIT OR Apache-2.0,Alex Crichton
+futures-io 0.3.31,https://github.com/rust-lang/futures-rs,MIT OR Apache-2.0,Alex Crichton
+futures-macro 0.3.31,https://github.com/rust-lang/futures-rs,MIT OR Apache-2.0,Alex Crichton
+futures-sink 0.3.31,https://github.com/rust-lang/futures-rs,MIT OR Apache-2.0,Alex Crichton
+futures-task 0.3.31,https://github.com/rust-lang/futures-rs,MIT OR Apache-2.0,Alex Crichton
+futures-timer 3.0.3,https://github.com/async-rs/futures-timer,MIT/Apache-2.0,Alex Crichton
+futures-util 0.3.31,https://github.com/rust-lang/futures-rs,MIT OR Apache-2.0,Alex Crichton
+generic-array 0.14.7,https://github.com/fizyk20/generic-array.git,MIT,Bartłomiej Kamiński
+getrandom 0.2.16,https://github.com/rust-random/getrandom,MIT OR Apache-2.0,The rust-random Project Developers
+getrandom 0.3.4,https://github.com/rust-random/getrandom,MIT OR Apache-2.0,The rust-random Project Developers
+gimli 0.31.1,https://github.com/gimli-rs/gimli,MIT OR Apache-2.0,The Rust Project Developers
+gimli 0.32.3,https://github.com/gimli-rs/gimli,MIT OR Apache-2.0,The Rust Project Developers
+h2 0.4.12,https://github.com/hyperium/h2,MIT,h2 authors
+halfbrown 0.2.5,https://github.com/Licenser/halfbrown,Apache-2.0/MIT,owner or entity authorized by
+hashbrown 0.12.3,https://github.com/rust-lang/hashbrown,MIT OR Apache-2.0,Amanieu d'Antras
+hashbrown 0.14.5,https://github.com/rust-lang/hashbrown,MIT OR Apache-2.0,Amanieu d'Antras
+hashbrown 0.15.5,https://github.com/rust-lang/hashbrown,MIT OR Apache-2.0,Amanieu d'Antras
+hashbrown 0.16.0,https://github.com/rust-lang/hashbrown,MIT OR Apache-2.0,Amanieu d'Antras
+headers 0.4.1,https://github.com/hyperium/headers,MIT,Sean McArthur
+headers-core 0.3.0,https://github.com/hyperium/headers,MIT,Sean McArthur
+heck 0.5.0,https://github.com/withoutboats/heck,MIT OR Apache-2.0,The Rust Project Developers
+hermit-abi 0.3.9,https://github.com/hermit-os/hermit-rs,MIT OR Apache-2.0,notice and this permission notice
+hex 0.4.3,https://github.com/KokaKiwi/rust-hex,MIT OR Apache-2.0,The Rust Project Developers.
+hmac 0.12.1,https://github.com/RustCrypto/MACs,MIT OR Apache-2.0,Artyom Pavlov
+http 1.3.1,https://github.com/hyperium/http,MIT OR Apache-2.0,http-rs authors
+http-body 1.0.1,https://github.com/hyperium/http-body,MIT,Sean McArthur & Hyper Contributors
+http-body-util 0.1.3,https://github.com/hyperium/http-body,MIT,Sean McArthur & Hyper Contributors
+httparse 1.10.1,https://github.com/seanmonstar/httparse,MIT OR Apache-2.0,Sean McArthur
+httpdate 1.0.3,https://github.com/pyfisch/httpdate,MIT OR Apache-2.0,Pyfisch
+httpmock 0.8.2,https://github.com/httpmock/httpmock,MIT,Alexander Liesenfeld
+humantime 2.3.0,https://github.com/chronotope/humantime,MIT OR Apache-2.0,The humantime Developers
+hyper 1.8.0,https://github.com/hyperium/hyper,MIT,Sean McArthur
+hyper-multipart-rfc7578 0.9.0,https://github.com/ferristseng/rust-multipart-rfc7578,MIT OR Apache-2.0,
+hyper-rustls 0.27.7,https://github.com/rustls/hyper-rustls,Apache-2.0 OR ISC OR MIT,owner or entity authorized by
+hyper-util 0.1.18,https://github.com/hyperium/hyper-util,MIT,Sean McArthur
+iana-time-zone 0.1.64,https://github.com/strawlab/iana-time-zone,MIT OR Apache-2.0,Andrew D. Straw
+iana-time-zone-haiku 0.1.2,https://github.com/strawlab/iana-time-zone,MIT OR Apache-2.0,Andrew D. Straw
+icu_collections 2.1.1,https://github.com/unicode-org/icu4x,Unicode-3.0,AND PERMISSION NOTICE
+icu_locale_core 2.1.1,https://github.com/unicode-org/icu4x,Unicode-3.0,AND PERMISSION NOTICE
+icu_normalizer 2.1.1,https://github.com/unicode-org/icu4x,Unicode-3.0,AND PERMISSION NOTICE
+icu_normalizer_data 2.1.1,https://github.com/unicode-org/icu4x,Unicode-3.0,AND PERMISSION NOTICE
+icu_properties 2.1.1,https://github.com/unicode-org/icu4x,Unicode-3.0,AND PERMISSION NOTICE
+icu_properties_data 2.1.1,https://github.com/unicode-org/icu4x,Unicode-3.0,AND PERMISSION NOTICE
+icu_provider 2.1.1,https://github.com/unicode-org/icu4x,Unicode-3.0,AND PERMISSION NOTICE
+ident_case 1.0.1,https://github.com/TedDriggs/ident_case,MIT/Apache-2.0,notice and this permission notice shall be included in all
+idna 1.1.0,https://github.com/servo/rust-url/,MIT OR Apache-2.0,The rust-url developers
+idna_adapter 1.2.1,https://github.com/hsivonen/idna_adapter,Apache-2.0 OR MIT,owner or entity authorized by
+indexmap 1.9.3,https://github.com/bluss/indexmap,Apache-2.0 OR MIT,owner or entity authorized by
+indexmap 2.12.0,https://github.com/indexmap-rs/indexmap,Apache-2.0 OR MIT,owner or entity authorized by
+inout 0.1.4,https://github.com/RustCrypto/utils,MIT OR Apache-2.0,The RustCrypto Project Developers
+io-lifetimes 1.0.11,https://github.com/sunfishcode/io-lifetimes,Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT,owner or entity authorized by
+is_terminal_polyfill 1.70.2,https://github.com/polyfill-rs/is_terminal_polyfill,MIT OR Apache-2.0,Individual contributors
+itertools 0.14.0,https://github.com/rust-itertools/itertools,MIT OR Apache-2.0,"Permission is hereby granted, free of charge, to any"
+itoa 1.0.15,https://github.com/dtolnay/itoa,MIT OR Apache-2.0,notice and this permission notice
+jobserver 0.1.34,https://github.com/rust-lang/jobserver-rs,MIT OR Apache-2.0,Alex Crichton
+js-sys 0.3.82,https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys,MIT OR Apache-2.0,Alex Crichton
+kernel32-sys 0.2.2,https://github.com/retep998/winapi-rs,MIT,
+lazy_static 1.5.0,https://github.com/rust-lang-nursery/lazy-static.rs,MIT OR Apache-2.0,The Rust Project Developers
+libbz2-rs-sys 0.2.2,https://github.com/trifectatechfoundation/libbzip2-rs,bzip2-1.0.6,Julian R Seward.
+libc 0.2.177,https://github.com/rust-lang/libc,MIT OR Apache-2.0,The Rust Project Developers
+liblzma 0.4.5,https://github.com/portable-network-archive/liblzma-rs,MIT OR Apache-2.0,Alex Crichton and Portable-Network-Archive Developers
+liblzma-sys 0.4.4,https://github.com/portable-network-archive/liblzma-rs,MIT OR Apache-2.0,Alex Crichton and Portable-Network-Archive Developers
+libredox 0.1.10,https://gitlab.redox-os.org/redox-os/libredox.git,MIT,4lDO2
+libz-rs-sys 0.5.2,https://github.com/trifectatechfoundation/zlib-rs,Zlib,
+linux-raw-sys 0.11.0,https://github.com/sunfishcode/linux-raw-sys,Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT,owner or entity authorized by
+litemap 0.8.1,https://github.com/unicode-org/icu4x,Unicode-3.0,AND PERMISSION NOTICE
+lock_api 0.4.14,https://github.com/Amanieu/parking_lot,MIT OR Apache-2.0,The Rust Project Developers
+log 0.4.28,https://github.com/rust-lang/log,MIT OR Apache-2.0,The Rust Project Developers
+lz4_flex 0.9.5,https://github.com/pseitz/lz4_flex,MIT,
+manual_future 0.1.3,https://github.com/dmarcuse/manual_future.git,MIT,Dana Marcuse
+matchers 0.2.0,https://github.com/hawkw/matchers,MIT,Eliza Weisman
+md5 0.7.0,https://github.com/stainless-steel/md5,Apache-2.0/MIT,2015–2019 The md5 Developers
+memchr 2.7.6,https://github.com/BurntSushi/memchr,Unlicense OR MIT,"laws, the author or authors"
+memfd 0.6.5,https://github.com/lucab/memfd-rs,MIT OR Apache-2.0, 
+memmap2 0.9.9,https://github.com/RazrFalcon/memmap2-rs,MIT OR Apache-2.0,Yevhenii Reizner
+memoffset 0.9.1,https://github.com/Gilnaa/memoffset,MIT,Gilad Naaman
+memory-stats 1.2.0,https://github.com/Arc-blroth/memory-stats,MIT OR Apache-2.0,Arc'blroth
+microseh 0.1.1,https://github.com/sonodima/microseh,MIT,sonodima
+mime 0.3.17,https://github.com/hyperium/mime,MIT OR Apache-2.0,Sean McArthur
+mime_guess 2.0.5,https://github.com/abonander/mime_guess,MIT,Austin Bonander
+miniz_oxide 0.8.9,https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide,MIT OR Zlib OR Apache-2.0,RAD Game Tools and Valve Software
+mio 1.1.0,https://github.com/tokio-rs/mio,MIT,Carl Lerche and other MIO contributors
+msvc-demangler 0.10.1,https://github.com/mstange/msvc-demangler-rust,MIT/NCSA,"Google, Mozilla"
+nix 0.29.0,https://github.com/nix-rust/nix,MIT,Carl Lerche + nix-rust Authors
+nix 0.30.1,https://github.com/nix-rust/nix,MIT,Carl Lerche + nix-rust Authors
+ntapi 0.4.1,https://github.com/MSxDOS/ntapi,Apache-2.0 OR MIT,owner or entity authorized by
+nu-ansi-term 0.50.3,https://github.com/nushell/nu-ansi-term,MIT,Benjamin Sago
+num-bigint 0.4.6,https://github.com/rust-num/num-bigint,MIT OR Apache-2.0,The Rust Project Developers
+num-conv 0.1.0,https://github.com/jhpratt/num-conv,MIT OR Apache-2.0,Jacob Pratt
+num-derive 0.4.2,https://github.com/rust-num/num-derive,MIT OR Apache-2.0,The Rust Project Developers
+num-integer 0.1.46,https://github.com/rust-num/num-integer,MIT OR Apache-2.0,The Rust Project Developers
+num-traits 0.2.19,https://github.com/rust-num/num-traits,MIT OR Apache-2.0,The Rust Project Developers
+objc2 0.6.3,https://github.com/madsmtm/objc2,MIT,
+objc2-cloud-kit 0.3.2,https://github.com/madsmtm/objc2,Zlib OR Apache-2.0 OR MIT,
+objc2-core-data 0.3.2,https://github.com/madsmtm/objc2,Zlib OR Apache-2.0 OR MIT,
+objc2-core-foundation 0.3.2,https://github.com/madsmtm/objc2,Zlib OR Apache-2.0 OR MIT,
+objc2-core-graphics 0.3.2,https://github.com/madsmtm/objc2,Zlib OR Apache-2.0 OR MIT,
+objc2-core-image 0.3.2,https://github.com/madsmtm/objc2,Zlib OR Apache-2.0 OR MIT,
+objc2-core-location 0.3.2,https://github.com/madsmtm/objc2,Zlib OR Apache-2.0 OR MIT,
+objc2-core-text 0.3.2,https://github.com/madsmtm/objc2,Zlib OR Apache-2.0 OR MIT,
+objc2-encode 4.1.0,https://github.com/madsmtm/objc2,MIT,
+objc2-foundation 0.3.2,https://github.com/madsmtm/objc2,MIT,
+objc2-io-surface 0.3.2,https://github.com/madsmtm/objc2,Zlib OR Apache-2.0 OR MIT,
+objc2-quartz-core 0.3.2,https://github.com/madsmtm/objc2,Zlib OR Apache-2.0 OR MIT,
+objc2-ui-kit 0.3.2,https://github.com/madsmtm/objc2,Zlib OR Apache-2.0 OR MIT,
+objc2-user-notifications 0.3.2,https://github.com/madsmtm/objc2,Zlib OR Apache-2.0 OR MIT,
+object 0.31.1,https://github.com/gimli-rs/object,Apache-2.0 OR MIT,owner or entity authorized by
+object 0.36.7,https://github.com/gimli-rs/object,Apache-2.0 OR MIT,owner or entity authorized by
+once_cell 1.21.3,https://github.com/matklad/once_cell,MIT OR Apache-2.0,notice and this permission notice
+once_cell_polyfill 1.70.2,https://github.com/polyfill-rs/once_cell_polyfill,MIT OR Apache-2.0,Individual contributors
+openssl-probe 0.1.6,https://github.com/alexcrichton/openssl-probe,MIT/Apache-2.0,Alex Crichton
+os_info 3.13.0,https://github.com/stanislav-tkach/os_info,MIT,Stanislav Tkach
+page_size 0.6.0,https://github.com/Elzair/page_size_rs,MIT/Apache-2.0,The Rust Project Developers
+parking 2.2.1,https://github.com/smol-rs/parking,Apache-2.0 OR MIT,owner or entity authorized by
+parking_lot 0.12.5,https://github.com/Amanieu/parking_lot,MIT OR Apache-2.0,The Rust Project Developers
+parking_lot_core 0.9.12,https://github.com/Amanieu/parking_lot,MIT OR Apache-2.0,The Rust Project Developers
+paste 1.0.15,https://github.com/dtolnay/paste,MIT OR Apache-2.0,notice and this permission notice
+path-tree 0.8.3,https://github.com/viz-rs/path-tree,MIT OR Apache-2.0,2019-present Fangdun Tsai
+pbkdf2 0.12.2,https://github.com/RustCrypto/password-hashes/tree/master/pbkdf2,MIT OR Apache-2.0,Artyom Pavlov
+percent-encoding 2.3.2,https://github.com/servo/rust-url/,MIT OR Apache-2.0,The rust-url developers
+pico-args 0.5.0,https://github.com/RazrFalcon/pico-args,MIT,Yevhenii Reizner
+pin-project 1.1.10,https://github.com/taiki-e/pin-project,Apache-2.0 OR MIT,owner or entity authorized by
+pin-project-internal 1.1.10,https://github.com/taiki-e/pin-project,Apache-2.0 OR MIT,owner or entity authorized by
+pin-project-lite 0.2.16,https://github.com/taiki-e/pin-project-lite,Apache-2.0 OR MIT,owner or entity authorized by
+pin-utils 0.1.0,https://github.com/rust-lang-nursery/pin-utils,MIT OR Apache-2.0,The pin-utils authors
+portable-atomic 1.11.1,https://github.com/taiki-e/portable-atomic,Apache-2.0 OR MIT,owner or entity authorized by
+potential_utf 0.1.4,https://github.com/unicode-org/icu4x,Unicode-3.0,AND PERMISSION NOTICE
+powerfmt 0.2.0,https://github.com/jhpratt/powerfmt,MIT OR Apache-2.0,Jacob Pratt et al.
+ppmd-rust 1.3.0,https://github.com/hasenbanck/ppmd-rust,CC0-1.0,
+ppv-lite86 0.2.21,https://github.com/cryptocorrosion/cryptocorrosion,MIT OR Apache-2.0,The CryptoCorrosion Contributors
+prctl 1.0.0,https://github.com/viraptor/prctl-rs.git,MIT,
+pretty-hex 0.4.1,https://github.com/wolandr/pretty-hex,MIT,Andrei Volnin
+priority-queue 2.7.0,https://github.com/garro95/priority-queue,LGPL-3.0-or-later OR MPL-2.0,
+proc-macro-crate 2.0.0,https://github.com/bkchr/proc-macro-crate,MIT OR Apache-2.0,notice and this permission notice
+proc-macro2 1.0.103,https://github.com/dtolnay/proc-macro2,MIT OR Apache-2.0,notice and this permission notice
+prost 0.13.5,https://github.com/tokio-rs/prost,Apache-2.0,owner or entity authorized by
+prost-derive 0.13.5,https://github.com/tokio-rs/prost,Apache-2.0,owner or entity authorized by
+quote 1.0.42,https://github.com/dtolnay/quote,MIT OR Apache-2.0,notice and this permission notice
+r-efi 5.3.0,https://github.com/r-efi/r-efi,MIT OR Apache-2.0 OR LGPL-2.1-or-later,
+rand 0.8.5,https://github.com/rust-random/rand,MIT OR Apache-2.0,Developers of the Rand project
+rand 0.9.2,https://github.com/rust-random/rand,MIT OR Apache-2.0,Developers of the Rand project
+rand_chacha 0.3.1,https://github.com/rust-random/rand,MIT OR Apache-2.0,Developers of the Rand project
+rand_chacha 0.9.0,https://github.com/rust-random/rand,MIT OR Apache-2.0,Developers of the Rand project
+rand_core 0.6.4,https://github.com/rust-random/rand,MIT OR Apache-2.0,Developers of the Rand project
+rand_core 0.9.3,https://github.com/rust-random/rand,MIT OR Apache-2.0,Developers of the Rand project
+rand_xoshiro 0.7.0,https://github.com/rust-random/rngs,MIT OR Apache-2.0,Developers of the Rand project
+redox_syscall 0.5.18,https://gitlab.redox-os.org/redox-os/syscall,MIT,Redox OS Developers
+ref-cast 1.0.25,https://github.com/dtolnay/ref-cast,MIT OR Apache-2.0,notice and this permission notice
+ref-cast-impl 1.0.25,https://github.com/dtolnay/ref-cast,MIT OR Apache-2.0,notice and this permission notice
+regex 1.12.2,https://github.com/rust-lang/regex,MIT OR Apache-2.0,The Rust Project Developers
+regex-automata 0.4.13,https://github.com/rust-lang/regex,MIT OR Apache-2.0,The Rust Project Developers
+regex-syntax 0.8.8,https://github.com/rust-lang/regex,MIT OR Apache-2.0,The Rust Project Developers
+ring 0.17.14,https://github.com/briansmith/ring,Apache-2.0 AND ISC,
+rmp 0.8.14,https://github.com/3Hren/msgpack-rust,MIT,Evgeny Safronov
+rmp-serde 1.3.0,https://github.com/3Hren/msgpack-rust,MIT,Evgeny Safronov
+rmpv 1.3.0,https://github.com/3Hren/msgpack-rust,MIT,Evgeny Safronov
+rustc-demangle 0.1.26,https://github.com/rust-lang/rustc-demangle,MIT/Apache-2.0,Alex Crichton
+rustc-hash 1.1.0,https://github.com/rust-lang-nursery/rustc-hash,Apache-2.0/MIT,owner or entity authorized by
+rustix 1.1.2,https://github.com/bytecodealliance/rustix,Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT,owner or entity authorized by
+rustls 0.23.35,https://github.com/rustls/rustls,Apache-2.0 OR ISC OR MIT,owner or entity authorized by
+rustls-native-certs 0.8.2,https://github.com/rustls/rustls-native-certs,Apache-2.0 OR ISC OR MIT,owner or entity authorized by
+rustls-pki-types 1.13.0,https://github.com/rustls/pki-types,MIT OR Apache-2.0,Dirkjan Ochtman 
+rustls-webpki 0.103.8,https://github.com/rustls/webpki,ISC,Brian Smith.
+rustversion 1.0.22,https://github.com/dtolnay/rustversion,MIT OR Apache-2.0,notice and this permission notice
+ruzstd 0.3.1,https://github.com/KillingSpark/zstd-rs,MIT,Moritz Borcherding
+ryu 1.0.20,https://github.com/dtolnay/ryu,Apache-2.0 OR BSL-1.0,owner or entity authorized by
+same-file 1.0.6,https://github.com/BurntSushi/same-file,Unlicense/MIT,"laws, the author or authors"
+schannel 0.1.28,https://github.com/steffengy/schannel-rs,MIT,steffengy
+schemars 0.8.22,https://github.com/GREsau/schemars,MIT,Graham Esau
+schemars 0.9.0,https://github.com/GREsau/schemars,MIT,Graham Esau
+schemars 1.1.0,https://github.com/GREsau/schemars,MIT,Graham Esau
+schemars_derive 0.8.22,https://github.com/GREsau/schemars,MIT,Graham Esau
+scopeguard 1.2.0,https://github.com/bluss/scopeguard,MIT OR Apache-2.0,"Ulrik Sverdrup ""bluss"" and scopeguard developers"
+security-framework 3.5.1,https://github.com/kornelski/rust-security-framework,MIT OR Apache-2.0,Steven Fackler
+security-framework-sys 2.15.0,https://github.com/kornelski/rust-security-framework,MIT OR Apache-2.0,Steven Fackler
+semver 1.0.27,https://github.com/dtolnay/semver,MIT OR Apache-2.0,notice and this permission notice
+sendfd 0.4.4,https://github.com/standard-ai/sendfd,Apache-2.0 OR BSD-3-Clause,Standard Cognition
+serde 1.0.228,https://github.com/serde-rs/serde,MIT OR Apache-2.0,notice and this permission notice
+serde-bool 0.1.4,https://github.com/x52dev/serde-utils,MIT OR Apache-2.0,2023-NOW Rob Ede
+serde_bytes 0.11.19,https://github.com/serde-rs/bytes,MIT OR Apache-2.0,notice and this permission notice
+serde_core 1.0.228,https://github.com/serde-rs/serde,MIT OR Apache-2.0,notice and this permission notice
+serde_derive 1.0.228,https://github.com/serde-rs/serde,MIT OR Apache-2.0,notice and this permission notice
+serde_derive_internals 0.29.1,https://github.com/serde-rs/serde,MIT OR Apache-2.0,notice and this permission notice
+serde_fmt 1.0.3,https://github.com/KodrAus/serde_fmt.git,Apache-2.0 OR MIT,owner or entity authorized by
+serde_json 1.0.145,https://github.com/serde-rs/json,MIT OR Apache-2.0,notice and this permission notice
+serde_regex 1.1.0,,MIT/Apache-2.0,The serde_regex Developers
+serde_spanned 0.6.9,https://github.com/toml-rs/toml,MIT OR Apache-2.0,Individual contributors
+serde_spanned 1.0.3,https://github.com/toml-rs/toml,MIT OR Apache-2.0,Individual contributors
+serde_with 3.15.1,https://github.com/jonasbb/serde_with/,MIT OR Apache-2.0,"Permission is hereby granted, free of charge, to any"
+serde_with_macros 3.15.1,https://github.com/jonasbb/serde_with/,MIT OR Apache-2.0,"Permission is hereby granted, free of charge, to any"
+serde_yaml 0.9.34+deprecated,https://github.com/dtolnay/serde-yaml,MIT OR Apache-2.0,notice and this permission notice
+sha1 0.10.6,https://github.com/RustCrypto/hashes,MIT OR Apache-2.0,Graydon Hoare
+sha2 0.10.9,https://github.com/RustCrypto/hashes,MIT OR Apache-2.0,Graydon Hoare
+sharded-slab 0.1.7,https://github.com/hawkw/sharded-slab,MIT,Eliza Weisman
+shlex 1.3.0,https://github.com/comex/rust-shlex,MIT OR Apache-2.0,Nicholas Allegra (comex).
+signal-hook-registry 1.4.6,https://github.com/vorner/signal-hook,Apache-2.0/MIT,owner or entity authorized by
+simd-adler32 0.3.7,https://github.com/mcountryman/simd-adler32,MIT,[2021] [Marvin Countryman]
+simd-json 0.14.3,https://github.com/simd-lite/simd-json,Apache-2.0 OR MIT,owner or entity authorized by
+simdutf8 0.1.5,https://github.com/rusticstuff/simdutf8,MIT OR Apache-2.0,notice and this permission notice shall be included in all
+similar 2.7.0,https://github.com/mitsuhiko/similar,Apache-2.0,owner or entity authorized by
+slab 0.4.11,https://github.com/tokio-rs/slab,MIT,Carl Lerche
+smallvec 1.15.1,https://github.com/servo/rust-smallvec,MIT OR Apache-2.0,The Servo Project Developers
+socket2 0.6.1,https://github.com/rust-lang/socket2,MIT OR Apache-2.0,Alex Crichton
+stable_deref_trait 1.2.1,https://github.com/storyyeller/stable_deref_trait,MIT OR Apache-2.0,Robert Grosse
+static_assertions 1.1.0,https://github.com/nvzqz/static-assertions-rs,MIT OR Apache-2.0,Nikolai Vazquez
+stringmetrics 2.2.2,https://github.com/pluots/stringmetrics,License specified in file ($CARGO_HOME/registry/src/github.com-25cdd57fae9f0462/stringmetrics-2.2.2/LICENSE),Trevor Gross
+strsim 0.11.1,https://github.com/rapidfuzz/strsim-rs,MIT,Danny Guo
+strum 0.26.3,https://github.com/Peternator7/strum,MIT,Peter Glotfelty
+strum_macros 0.26.4,https://github.com/Peternator7/strum,MIT,Peter Glotfelty
+subtle 2.6.1,https://github.com/dalek-cryptography/subtle,BSD-3-Clause,"Isis Agora Lovecruft, Henry de Valence. All rights reserved."
+sval 2.16.0,https://github.com/sval-rs/sval,Apache-2.0 OR MIT,owner or entity authorized by
+sval_buffer 2.16.0,https://github.com/sval-rs/sval,Apache-2.0 OR MIT,owner or entity authorized by
+sval_dynamic 2.16.0,https://github.com/sval-rs/sval,Apache-2.0 OR MIT,owner or entity authorized by
+sval_fmt 2.16.0,https://github.com/sval-rs/sval,Apache-2.0 OR MIT,owner or entity authorized by
+sval_json 2.16.0,https://github.com/sval-rs/sval,Apache-2.0 OR MIT,owner or entity authorized by
+sval_nested 2.16.0,https://github.com/sval-rs/sval,Apache-2.0 OR MIT,
+sval_ref 2.16.0,https://github.com/sval-rs/sval,Apache-2.0 OR MIT,owner or entity authorized by
+sval_serde 2.16.0,https://github.com/sval-rs/sval,Apache-2.0 OR MIT,owner or entity authorized by
+symbolic-common 12.16.3,https://github.com/getsentry/symbolic,MIT,
+symbolic-demangle 12.16.3,https://github.com/getsentry/symbolic,MIT,
+syn 1.0.109,https://github.com/dtolnay/syn,MIT OR Apache-2.0,notice and this permission notice
+syn 2.0.110,https://github.com/dtolnay/syn,MIT OR Apache-2.0,notice and this permission notice
+synstructure 0.13.2,https://github.com/mystor/synstructure,MIT,Nika Layzell
+sys-info 0.9.1,https://github.com/FillZpp/sys-info-rs,MIT,Siyu Wang
+sysinfo 0.29.11,https://github.com/GuillaumeGomez/sysinfo,MIT,Guillaume Gomez
+tabwriter 1.4.1,https://github.com/BurntSushi/tabwriter,Unlicense/MIT,"laws, the author or authors"
+tar 0.4.44,https://github.com/alexcrichton/tar-rs,MIT OR Apache-2.0,Alex Crichton
+target-triple 0.1.4,https://github.com/dtolnay/target-triple,MIT OR Apache-2.0,notice and this permission notice
+tempfile 3.23.0,https://github.com/Stebalien/tempfile,MIT OR Apache-2.0,Steven Allen
+thiserror 1.0.69,https://github.com/dtolnay/thiserror,MIT OR Apache-2.0,notice and this permission notice
+thiserror 2.0.17,https://github.com/dtolnay/thiserror,MIT OR Apache-2.0,notice and this permission notice
+thiserror-impl 1.0.69,https://github.com/dtolnay/thiserror,MIT OR Apache-2.0,notice and this permission notice
+thiserror-impl 2.0.17,https://github.com/dtolnay/thiserror,MIT OR Apache-2.0,notice and this permission notice
+thread_local 1.1.9,https://github.com/Amanieu/thread_local-rs,MIT OR Apache-2.0,The Rust Project Developers
+time 0.3.44,https://github.com/time-rs/time,MIT OR Apache-2.0,Jacob Pratt et al.
+time-core 0.1.6,https://github.com/time-rs/time,MIT OR Apache-2.0,Jacob Pratt et al.
+time-macros 0.2.24,https://github.com/time-rs/time,MIT OR Apache-2.0,Jacob Pratt et al.
+tinystr 0.8.2,https://github.com/unicode-org/icu4x,Unicode-3.0,AND PERMISSION NOTICE
+tokio 1.48.0,https://github.com/tokio-rs/tokio,MIT,Tokio Contributors
+tokio-macros 2.6.0,https://github.com/tokio-rs/tokio,MIT,Yoshua Wuyts
+tokio-rustls 0.26.4,https://github.com/rustls/tokio-rustls,MIT OR Apache-2.0,quininer kel
+tokio-serde 0.8.0,https://github.com/carllerche/tokio-serde,MIT OR Apache-2.0,Carl Lerche
+tokio-util 0.7.17,https://github.com/tokio-rs/tokio,MIT,Tokio Contributors
+toml 0.8.23,https://github.com/toml-rs/toml,MIT OR Apache-2.0,Individual contributors
+toml 0.9.8,https://github.com/toml-rs/toml,MIT OR Apache-2.0,Individual contributors
+toml_datetime 0.6.11,https://github.com/toml-rs/toml,MIT OR Apache-2.0,Individual contributors
+toml_datetime 0.7.3,https://github.com/toml-rs/toml,MIT OR Apache-2.0,Individual contributors
+toml_edit 0.20.7,https://github.com/toml-rs/toml,MIT OR Apache-2.0,Individual contributors
+toml_edit 0.22.27,https://github.com/toml-rs/toml,MIT OR Apache-2.0,Individual contributors
+toml_parser 1.0.4,https://github.com/toml-rs/toml,MIT OR Apache-2.0,Individual contributors
+toml_write 0.1.2,https://github.com/toml-rs/toml,MIT OR Apache-2.0,Individual contributors
+toml_writer 1.0.4,https://github.com/toml-rs/toml,MIT OR Apache-2.0,Individual contributors
+tower-service 0.3.3,https://github.com/tower-rs/tower,MIT,Tower Contributors
+tracing 0.1.41,https://github.com/tokio-rs/tracing,MIT,Tokio Contributors
+tracing-appender 0.2.3,https://github.com/tokio-rs/tracing,MIT,Tokio Contributors
+tracing-attributes 0.1.30,https://github.com/tokio-rs/tracing,MIT,Tokio Contributors
+tracing-core 0.1.34,https://github.com/tokio-rs/tracing,MIT,Tokio Contributors
+tracing-log 0.2.0,https://github.com/tokio-rs/tracing,MIT,Tokio Contributors
+tracing-serde 0.2.0,https://github.com/tokio-rs/tracing,MIT,Tokio Contributors
+tracing-subscriber 0.3.20,https://github.com/tokio-rs/tracing,MIT,Tokio Contributors
+try-lock 0.2.5,https://github.com/seanmonstar/try-lock,MIT,Sean McArthur
+twox-hash 1.6.3,https://github.com/shepmaster/twox-hash,MIT,Jake Goulding
+typeid 1.0.3,https://github.com/dtolnay/typeid,MIT OR Apache-2.0,notice and this permission notice
+typenum 1.19.0,https://github.com/paholg/typenum,MIT OR Apache-2.0,Paho Lurie-Gregg
+unicase 2.8.1,https://github.com/seanmonstar/unicase,MIT OR Apache-2.0,Sean McArthur
+unicode-ident 1.0.22,https://github.com/dtolnay/unicode-ident,(MIT OR Apache-2.0) AND Unicode-3.0,notice and this permission notice
+unicode-width 0.2.2,https://github.com/unicode-rs/unicode-width,MIT OR Apache-2.0,The Rust Project Developers
+unicode-xid 0.2.6,https://github.com/unicode-rs/unicode-xid,MIT OR Apache-2.0,The Rust Project Developers
+unsafe-libyaml 0.2.11,https://github.com/dtolnay/unsafe-libyaml,MIT,notice and this permission notice
+untrusted 0.9.0,https://github.com/briansmith/untrusted,ISC,Brian Smith.
+url 2.5.7,https://github.com/servo/rust-url,MIT OR Apache-2.0,The rust-url developers
+urlencoding 2.1.3,https://github.com/kornelski/rust_urlencoding,MIT,notice and this permission notice shall be included in
+utf8_iter 1.0.4,https://github.com/hsivonen/utf8_iter,Apache-2.0 OR MIT,owner or entity authorized by
+utf8parse 0.2.2,https://github.com/alacritty/vte,Apache-2.0 OR MIT,owner or entity authorized by
+uuid 1.18.1,https://github.com/uuid-rs/uuid,Apache-2.0 OR MIT,owner or entity authorized by
+valuable 0.1.1,https://github.com/tokio-rs/valuable,MIT,
+value-bag 1.11.1,https://github.com/sval-rs/value-bag,Apache-2.0 OR MIT,owner or entity authorized by
+value-bag-serde1 1.11.1,,Apache-2.0 OR MIT,owner or entity authorized by
+value-bag-sval2 1.11.1,,Apache-2.0 OR MIT,owner or entity authorized by
+value-trait 0.10.1,https://github.com/simd-lite/value-trait,Apache-2.0/MIT,owner or entity authorized by
+walkdir 2.5.0,https://github.com/BurntSushi/walkdir,Unlicense/MIT,"laws, the author or authors"
+want 0.3.1,https://github.com/seanmonstar/want,MIT,Sean McArthur
+wasi 0.11.1+wasi-snapshot-preview1,https://github.com/bytecodealliance/wasi,Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT,owner or entity authorized by
+wasip2 1.0.1+wasi-0.2.4,https://github.com/bytecodealliance/wasi-rs,Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT,
+wasm-bindgen 0.2.105,https://github.com/wasm-bindgen/wasm-bindgen,MIT OR Apache-2.0,Alex Crichton
+wasm-bindgen-macro 0.2.105,https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro,MIT OR Apache-2.0,Alex Crichton
+wasm-bindgen-macro-support 0.2.105,https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro-support,MIT OR Apache-2.0,Alex Crichton
+wasm-bindgen-shared 0.2.105,https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared,MIT OR Apache-2.0,Alex Crichton
+winapi 0.2.8,https://github.com/retep998/winapi-rs,MIT,Peter Atashian
+winapi 0.3.9,https://github.com/retep998/winapi-rs,MIT/Apache-2.0,The winapi-rs Developers
+winapi-i686-pc-windows-gnu 0.4.0,https://github.com/retep998/winapi-rs,MIT/Apache-2.0,
+winapi-util 0.1.11,https://github.com/BurntSushi/winapi-util,Unlicense OR MIT,"laws, the author or authors"
+winapi-x86_64-pc-windows-gnu 0.4.0,https://github.com/retep998/winapi-rs,MIT/Apache-2.0,
+windows 0.48.0,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows 0.51.1,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows 0.59.0,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows-core 0.51.1,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows-core 0.59.0,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows-core 0.62.2,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows-implement 0.59.0,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows-implement 0.60.2,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows-interface 0.59.3,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows-link 0.1.3,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows-link 0.2.1,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows-result 0.3.4,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows-result 0.4.1,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows-strings 0.3.1,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows-strings 0.5.1,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows-sys 0.42.0,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows-sys 0.48.0,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows-sys 0.52.0,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows-sys 0.60.2,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows-sys 0.61.2,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows-targets 0.48.5,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows-targets 0.52.6,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows-targets 0.53.5,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_aarch64_gnullvm 0.42.2,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_aarch64_gnullvm 0.48.5,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_aarch64_gnullvm 0.52.6,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_aarch64_gnullvm 0.53.1,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_aarch64_msvc 0.42.2,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_aarch64_msvc 0.48.5,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_aarch64_msvc 0.52.6,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_aarch64_msvc 0.53.1,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_i686_gnu 0.42.2,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_i686_gnu 0.48.5,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_i686_gnu 0.52.6,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_i686_gnu 0.53.1,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_i686_gnullvm 0.52.6,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_i686_gnullvm 0.53.1,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_i686_msvc 0.42.2,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_i686_msvc 0.48.5,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_i686_msvc 0.52.6,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_i686_msvc 0.53.1,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_x86_64_gnu 0.42.2,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_x86_64_gnu 0.48.5,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_x86_64_gnu 0.52.6,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_x86_64_gnu 0.53.1,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_x86_64_gnullvm 0.42.2,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_x86_64_gnullvm 0.48.5,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_x86_64_gnullvm 0.52.6,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_x86_64_gnullvm 0.53.1,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_x86_64_msvc 0.42.2,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_x86_64_msvc 0.48.5,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_x86_64_msvc 0.52.6,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+windows_x86_64_msvc 0.53.1,https://github.com/microsoft/windows-rs,MIT OR Apache-2.0,Microsoft Corporation.
+winnow 0.5.40,https://github.com/winnow-rs/winnow,MIT,notice and this permission notice shall be
+winnow 0.7.13,https://github.com/winnow-rs/winnow,MIT,notice and this permission notice shall be
+winver 1.0.0,https://github.com/rhysd/winver,MIT,rhysd
+wit-bindgen 0.46.0,https://github.com/bytecodealliance/wit-bindgen,Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT,owner or entity authorized by
+writeable 0.6.2,https://github.com/unicode-org/icu4x,Unicode-3.0,AND PERMISSION NOTICE
+xattr 1.6.1,https://github.com/Stebalien/xattr,MIT OR Apache-2.0,Steven Allen
+yoke 0.8.1,https://github.com/unicode-org/icu4x,Unicode-3.0,AND PERMISSION NOTICE
+yoke-derive 0.8.1,https://github.com/unicode-org/icu4x,Unicode-3.0,AND PERMISSION NOTICE
+zerocopy 0.8.27,https://github.com/google/zerocopy,BSD-2-Clause OR Apache-2.0 OR MIT,The Fuchsia Authors.
+zerocopy-derive 0.8.27,https://github.com/google/zerocopy,BSD-2-Clause OR Apache-2.0 OR MIT,The Fuchsia Authors.
+zerofrom 0.1.6,https://github.com/unicode-org/icu4x,Unicode-3.0,AND PERMISSION NOTICE
+zerofrom-derive 0.1.6,https://github.com/unicode-org/icu4x,Unicode-3.0,AND PERMISSION NOTICE
+zeroize 1.8.2,https://github.com/RustCrypto/utils,Apache-2.0 OR MIT,owner or entity authorized by
+zeroize_derive 1.4.2,https://github.com/RustCrypto/utils/tree/master/zeroize/derive,Apache-2.0 OR MIT,owner or entity authorized by
+zerotrie 0.2.3,https://github.com/unicode-org/icu4x,Unicode-3.0,AND PERMISSION NOTICE
+zerovec 0.11.5,https://github.com/unicode-org/icu4x,Unicode-3.0,AND PERMISSION NOTICE
+zerovec-derive 0.11.2,https://github.com/unicode-org/icu4x,Unicode-3.0,AND PERMISSION NOTICE
+zip 4.6.1,https://github.com/zip-rs/zip2.git,MIT,Mathijs van de Nes
+zlib-rs 0.5.2,https://github.com/trifectatechfoundation/zlib-rs,Zlib,
+zopfli 0.8.3,https://github.com/zopfli-rs/zopfli,Apache-2.0,Google Inc.
+zstd 0.13.3,https://github.com/gyscos/zstd-rs,MIT,Alexandre Bury
+zstd-safe 7.2.4,https://github.com/gyscos/zstd-rs,MIT OR Apache-2.0,Alexandre Bury
+zstd-sys 2.0.16+zstd.1.5.7,https://github.com/gyscos/zstd-rs,MIT/Apache-2.0,Alexandre Bury
+zwohash 0.1.2,https://github.com/jix/zwohash/,0BSD,
