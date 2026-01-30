@@ -542,15 +542,14 @@ EOF
 
 # Copy license files
 print_gray "  Copying license files..."
+# Copy LICENSE from libdatadog (Apache 2.0)
 cp libdatadog/LICENSE "$PACKAGE_DIR/" 2>/dev/null || true
-cp libdatadog/NOTICE "$PACKAGE_DIR/" 2>/dev/null || true
-
-# Look for LICENSE-3rdparty in yml or csv format
-if [ -f "libdatadog/LICENSE-3rdparty.yml" ]; then
-    cp libdatadog/LICENSE-3rdparty.yml "$PACKAGE_DIR/"
-elif [ -f "libdatadog/LICENSE-3rdparty.csv" ]; then
-    cp libdatadog/LICENSE-3rdparty.csv "$PACKAGE_DIR/"
-fi
+# Copy NOTICE from libdatadog-dotnet root
+[ -f "NOTICE" ] && cp NOTICE "$PACKAGE_DIR/" 2>/dev/null || true
+# Copy LICENSE-3rdparty.csv from libdatadog-dotnet root (summary of components)
+[ -f "LICENSE-3rdparty.csv" ] && cp LICENSE-3rdparty.csv "$PACKAGE_DIR/" 2>/dev/null || true
+# Copy LICENSE-3rdparty.yml from libdatadog (full license texts)
+[ -f "libdatadog/LICENSE-3rdparty.yml" ] && cp libdatadog/LICENSE-3rdparty.yml "$PACKAGE_DIR/" 2>/dev/null || true
 
 print_green "Build complete!"
 print_gray "  Package directory: $PACKAGE_DIR"

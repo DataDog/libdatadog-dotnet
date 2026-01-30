@@ -212,11 +212,22 @@ if (-not (Test-Path "$PackageDir/include/datadog/profiling.h")) {
     Write-Host "  Expected location: $headerPath/profiling.h" -ForegroundColor Red
 }
 
-# Copy license
-Write-Host "  Copying license..." -ForegroundColor Gray
+# Copy license files
+Write-Host "  Copying license files..." -ForegroundColor Gray
+# Copy LICENSE from libdatadog (Apache 2.0)
 Copy-Item "libdatadog/LICENSE" -Destination "$PackageDir/" -ErrorAction SilentlyContinue
-Copy-Item "libdatadog/LICENSE-3rdparty.csv" -Destination "$PackageDir/" -ErrorAction SilentlyContinue
-Copy-Item "libdatadog/NOTICE" -Destination "$PackageDir/" -ErrorAction SilentlyContinue
+# Copy NOTICE from libdatadog-dotnet root
+if (Test-Path "NOTICE") {
+    Copy-Item "NOTICE" -Destination "$PackageDir/" -ErrorAction SilentlyContinue
+}
+# Copy LICENSE-3rdparty.csv from libdatadog-dotnet root (summary of components)
+if (Test-Path "LICENSE-3rdparty.csv") {
+    Copy-Item "LICENSE-3rdparty.csv" -Destination "$PackageDir/" -ErrorAction SilentlyContinue
+}
+# Copy LICENSE-3rdparty.yml from libdatadog (full license texts)
+if (Test-Path "libdatadog/LICENSE-3rdparty.yml") {
+    Copy-Item "libdatadog/LICENSE-3rdparty.yml" -Destination "$PackageDir/" -ErrorAction SilentlyContinue
+}
 
 Write-Host "Build complete!" -ForegroundColor Green
 Write-Host "  Package directory: $PackageDir" -ForegroundColor Gray
