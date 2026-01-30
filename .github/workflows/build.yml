@@ -1,0 +1,162 @@
+# Unless explicitly stated otherwise all files in this repository are licensed
+# under the Apache License Version 2.0.
+# This product includes software developed at Datadog (https://www.datadoghq.com/).
+# Copyright 2025 Datadog, Inc.
+
+name: Build
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+# Default permissions for all jobs (least privilege principle)
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows builds
+          - arch: x64
+            platform: x64-windows
+            target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - arch: x86
+            platform: x86-windows
+            target: i686-pc-windows-msvc
+            os: windows-latest
+          # Linux x64 builds
+          - arch: x64
+            platform: x86_64-unknown-linux-gnu
+            target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - arch: x64
+            platform: x86_64-alpine-linux-musl
+            target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+          # Linux ARM64 builds
+          - arch: arm64
+            platform: aarch64-unknown-linux-gnu
+            target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+          - arch: arm64
+            platform: aarch64-alpine-linux-musl
+            target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+          # macOS builds
+          - arch: x64
+            platform: x86_64-apple-darwin
+            target: x86_64-apple-darwin
+            os: macos-15-large
+          - arch: arm64
+            platform: aarch64-apple-darwin
+            target: aarch64-apple-darwin
+            os: macos-15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Rust
+        run: |
+          rustup update stable
+          rustup default stable
+          rustup component add rustfmt clippy
+          rustup target add ${{ matrix.target }}
+
+      - name: Install cross-compilation tools (Linux only)
+        if: matrix.os == 'ubuntu-latest' && matrix.target != 'x86_64-unknown-linux-gnu'
+        run: |
+          cargo install cross --git https://github.com/cross-rs/cross
+          sudo apt-get update
+          case "${{ matrix.target }}" in
+            aarch64-*-linux-*)
+              sudo apt-get install -y binutils-aarch64-linux-gnu
+              ;;
+            x86_64-*-musl)
+              sudo apt-get install -y musl-tools
+              ;;
+          esac
+
+      - name: Add macOS target (macOS only)
+        if: runner.os == 'macOS' && matrix.target != matrix.arch
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Install LLVM tools (macOS only)
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm
+          echo "$(brew --prefix llvm)/bin" >> $GITHUB_PATH
+
+      - name: Build ${{ matrix.platform }}
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.target }}
+          FEATURE_PRESET: minimal
+        run: |
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            pwsh -Command "./build.ps1 -LibdatadogVersion '' -Platform '${{ matrix.platform }}' -Features 'minimal' -Clean -OutputDir 'output/libdatadog-${{ matrix.platform }}'"
+          else
+            chmod +x build.sh
+            ./build.sh --version "" --platform "${{ matrix.platform }}" --features "minimal" --clean --output "output/libdatadog-${{ matrix.platform }}"
+          fi
+        shell: bash
+
+      - name: Verify build artifacts
+        run: |
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            output_dir="output/libdatadog-${{ matrix.platform }}/libdatadog-${{ matrix.platform }}"
+            # Check for DLL
+            if [ ! -f "$output_dir/release/dynamic/datadog_profiling_ffi.dll" ]; then
+              echo "Error: Release DLL not found"
+              exit 1
+            fi
+            # Check for headers
+            if [ ! -d "$output_dir/include/datadog" ] || [ -z "$(ls -A $output_dir/include/datadog)" ]; then
+              echo "Error: Headers not found or empty"
+              exit 1
+            fi
+            # Check for license files
+            if [ ! -f "$output_dir/LICENSE" ]; then
+              echo "Error: LICENSE not found"
+              exit 1
+            fi
+            echo "Build artifacts verified successfully!"
+          else
+            output_dir="output/libdatadog-${{ matrix.platform }}/libdatadog-${{ matrix.platform }}"
+            # Check for shared library
+            if [ ! -f "$output_dir/lib/libdatadog_profiling.so" ] && [ ! -f "$output_dir/lib/libdatadog_profiling.dylib" ]; then
+              echo "Error: Shared library not found"
+              exit 1
+            fi
+            # Check for headers
+            if [ ! -d "$output_dir/include/datadog" ] || [ -z "$(ls -A $output_dir/include/datadog)" ]; then
+              echo "Error: Headers not found or empty"
+              exit 1
+            fi
+            # Check for license files
+            if [ ! -f "$output_dir/LICENSE" ]; then
+              echo "Error: LICENSE not found"
+              exit 1
+            fi
+            echo "Build artifacts verified successfully!"
+          fi
+        shell: bash
+
+      - name: Upload build artifacts (for debugging)
+        if: failure()
+        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # v4.5.0
+        with:
+          name: failed-build-${{ matrix.platform }}
+          path: output/
+          if-no-files-found: ignore
+          retention-days: 7
