@@ -105,13 +105,13 @@ print_gray "  Output directory: $OUTPUT_DIR"
 # Define feature sets
 case "$FEATURES" in
     minimal)
-        FEATURE_FLAGS="ddcommon-ffi"  # Core profiling only (~4MB) - fastest build
+        FEATURE_FLAGS="ddcommon-ffi,cbindgen"  # Core profiling only (~4MB) - fastest build
         ;;
     standard)
-        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,ddtelemetry-ffi"  # Most common features (~5-6MB)
+        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,ddtelemetry-ffi,cbindgen"  # Most common features (~5-6MB)
         ;;
     full)
-        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,crashtracker-receiver,demangler,ddtelemetry-ffi,data-pipeline-ffi,symbolizer,ddsketch-ffi,datadog-log-ffi,datadog-library-config-ffi,datadog-ffe-ffi"  # All features (~6.5MB) - matches original libdatadog
+        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,crashtracker-receiver,demangler,ddtelemetry-ffi,data-pipeline-ffi,symbolizer,ddsketch-ffi,datadog-log-ffi,datadog-library-config-ffi,datadog-ffe-ffi,cbindgen"  # All features (~6.5MB) - matches original libdatadog
         ;;
     *)
         print_red "Error: Invalid feature preset '$FEATURES'. Must be: minimal, standard, or full"
