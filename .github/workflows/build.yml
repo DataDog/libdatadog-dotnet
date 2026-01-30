@@ -104,10 +104,10 @@ jobs:
           FEATURE_PRESET: minimal
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
-            pwsh -Command "./build.ps1 -LibdatadogVersion '' -Platform '${{ matrix.platform }}' -Features 'minimal' -Clean -OutputDir 'output/libdatadog-${{ matrix.platform }}'"
+            pwsh -Command "./build.ps1 -LibdatadogVersion 'main' -Platform '${{ matrix.platform }}' -Features 'minimal' -Clean -OutputDir 'output/libdatadog-${{ matrix.platform }}'"
           else
             chmod +x build.sh
-            ./build.sh --version "" --platform "${{ matrix.platform }}" --features "minimal" --clean --output "output/libdatadog-${{ matrix.platform }}"
+            ./build.sh --version "main" --platform "${{ matrix.platform }}" --features "minimal" --clean --output "output/libdatadog-${{ matrix.platform }}"
           fi
         shell: bash
 
