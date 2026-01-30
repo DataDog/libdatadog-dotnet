@@ -186,43 +186,25 @@ if (Test-Path "$DebugDir/datadog_profiling_ffi.lib") {
 # Copy all headers from libdatadog
 Write-Host "  Copying headers..." -ForegroundColor Gray
 
-# Headers are generated during build with cbindgen feature to:
-# target/{architecture}/{profile}/include/datadog/
-# We check both release and debug locations
+# Headers are generated during build with cbindgen feature to the top level of target directory:
+# target/include/datadog/ (NOT in the profile or architecture subdirectory)
 
-$headerDirFound = $false
+$headerPath = "libdatadog/target/include/datadog"
+Write-Host "  Checking for headers in: $headerPath" -ForegroundColor DarkGray
 
-# Check release build location
-$releaseHeaderPath = "$ReleaseDir/include/datadog"
-Write-Host "  Checking for headers in: $releaseHeaderPath" -ForegroundColor DarkGray
-if (Test-Path $releaseHeaderPath) {
-    Write-Host "  Found headers in $releaseHeaderPath" -ForegroundColor Gray
-    Get-ChildItem $releaseHeaderPath -File | ForEach-Object { Write-Host "    - $($_.Name)" -ForegroundColor DarkGray }
-    Copy-Item "$releaseHeaderPath/*" -Destination "$PackageDir/include/datadog/" -Recurse -Force -ErrorAction SilentlyContinue
-    $headerDirFound = $true
+if (Test-Path $headerPath) {
+    Write-Host "  Found headers in $headerPath" -ForegroundColor Gray
+    Get-ChildItem $headerPath -File | ForEach-Object { Write-Host "    - $($_.Name)" -ForegroundColor DarkGray }
+    Copy-Item "$headerPath/*" -Destination "$PackageDir/include/datadog/" -Recurse -Force -ErrorAction SilentlyContinue
 } else {
-    Write-Host "  Headers NOT found in $releaseHeaderPath" -ForegroundColor Yellow
-}
-
-# Check debug build location
-$debugHeaderPath = "$DebugDir/include/datadog"
-Write-Host "  Checking for headers in: $debugHeaderPath" -ForegroundColor DarkGray
-if (Test-Path $debugHeaderPath) {
-    Write-Host "  Found headers in $debugHeaderPath" -ForegroundColor Gray
-    Get-ChildItem $debugHeaderPath -File | ForEach-Object { Write-Host "    - $($_.Name)" -ForegroundColor DarkGray }
-    Copy-Item "$debugHeaderPath/*" -Destination "$PackageDir/include/datadog/" -Recurse -Force -ErrorAction SilentlyContinue
-    $headerDirFound = $true
-} else {
-    Write-Host "  Headers NOT found in $debugHeaderPath" -ForegroundColor Yellow
+    Write-Host "  Error: Headers NOT found in $headerPath" -ForegroundColor Red
+    Write-Host "  This usually means the cbindgen feature wasn't enabled during build." -ForegroundColor Red
 }
 
 # Verify profiling.h exists (critical)
 if (-not (Test-Path "$PackageDir/include/datadog/profiling.h")) {
-    Write-Host "  Error: profiling.h not found after build. Headers were not generated." -ForegroundColor Red
-    Write-Host "  This usually means the cbindgen feature wasn't enabled during build." -ForegroundColor Red
-    Write-Host "  Checked locations:" -ForegroundColor Red
-    Write-Host "    - $releaseHeaderPath" -ForegroundColor Red
-    Write-Host "    - $debugHeaderPath" -ForegroundColor Red
+    Write-Host "  Error: profiling.h not found after build." -ForegroundColor Red
+    Write-Host "  Expected location: $headerPath/profiling.h" -ForegroundColor Red
 }
 
 # Copy license
