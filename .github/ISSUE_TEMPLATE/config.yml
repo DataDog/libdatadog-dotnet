@@ -1,0 +1,13 @@
+# Unless explicitly stated otherwise all files in this repository are licensed
+# under the Apache License Version 2.0.
+# This product includes software developed at Datadog (https://www.datadoghq.com/).
+# Copyright 2025 Datadog, Inc.
+
+blank_issues_enabled: true
+contact_links:
+  - name: Datadog Support
+    url: https://www.datadoghq.com/support/
+    about: For Datadog-specific support, please contact Datadog Support
+  - name: Community
+    url: https://github.com/DataDog/libdatadog-dotnet/discussions
+    about: Ask questions and discuss with the community
