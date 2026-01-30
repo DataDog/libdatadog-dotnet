@@ -16,14 +16,3 @@ Copyright 2025 Datadog, Inc.
 ## Additional Notes
 
 <!-- Anything else we should know when reviewing? -->
-
-## How to test the change?
-
-<!-- Describe how reviewers can test your changes. Include any relevant details about your test environment. -->
-
-## Checklist
-
-- [ ] The change is covered by tests (if applicable)
-- [ ] Documentation has been updated (if applicable)
-- [ ] The code follows the project's style guidelines
-- [ ] All CI checks pass
