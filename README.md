@@ -159,25 +159,7 @@ The libdatadog version is automatically determined at build time:
 
 This allows you to build and release the latest libdatadog code anytime, even if libdatadog hasn't released a new version yet.
 
-## Integration with dd-trace-dotnet
-
-The dd-trace-dotnet repository downloads binaries from this repository's releases via vcpkg.
-
-### Updating dd-trace-dotnet
-
-To use a new libdatadog-dotnet release in dd-trace-dotnet:
-
-1. Update the version in `build/vcpkg_local_ports/libdatadog/vcpkg.json`
-2. Update the URL and SHA512 hash in `build/vcpkg_local_ports/libdatadog/portfile.cmake`:
-   ```cmake
-   set(LIBDATADOG_VERSION v1.0.0)
-   set(LIBDATADOG_URL "https://github.com/DataDog/libdatadog-dotnet/releases/download/v1.0.0/libdatadog-${PLATFORM}.zip")
-   set(LIBDATADOG_HASH "<sha512-from-release-notes>")
-   ```
-
 ## Contributing
-
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 For security vulnerabilities, please see our [Security Policy](SECURITY.md).
 
@@ -200,7 +182,6 @@ libdatadog-dotnet/
 ├── build.ps1                         # Windows build script
 ├── build.sh                          # Linux/macOS build script
 ├── CODEOWNERS                        # Code ownership
-├── CONTRIBUTING.md                   # Contribution guidelines
 ├── LICENSE                           # Apache 2.0 license
 ├── LICENSE-3rdparty.csv              # Third-party components
 ├── NOTICE                            # Copyright notice
