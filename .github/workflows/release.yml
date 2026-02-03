@@ -32,135 +32,14 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.platform }}
-    runs-on: ${{ matrix.os }}
+    name: Build all platforms
+    uses: ./.github/workflows/build-platform.yml
     permissions:
       contents: read
-    strategy:
-      matrix:
-        include:
-          # Windows builds
-          - arch: x64
-            platform: x64-windows
-            target: x86_64-pc-windows-msvc
-            os: windows-latest
-          - arch: x86
-            platform: x86-windows
-            target: i686-pc-windows-msvc
-            os: windows-latest
-          # Linux x64 builds
-          - arch: x64
-            platform: x86_64-unknown-linux-gnu
-            target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-          - arch: x64
-            platform: x86_64-alpine-linux-musl
-            target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-          # Linux ARM64 builds
-          - arch: arm64
-            platform: aarch64-unknown-linux-gnu
-            target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-          - arch: arm64
-            platform: aarch64-alpine-linux-musl
-            target: aarch64-unknown-linux-musl
-            os: ubuntu-latest
-          # macOS builds
-          - arch: x64
-            platform: x86_64-apple-darwin
-            target: x86_64-apple-darwin
-            os: macos-15-large  # Intel runner (macos-13 is deprecated)
-          - arch: arm64
-            platform: aarch64-apple-darwin
-            target: aarch64-apple-darwin
-            os: macos-15  # ARM64 runner (Apple Silicon)
-    outputs:
-      libdatadog_version: ${{ steps.version.outputs.LIBDATADOG_VERSION }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: Setup Rust
-        run: |
-          rustup update stable
-          rustup default stable
-          rustup component add rustfmt clippy
-          rustup target add ${{ matrix.target }}
-
-      - name: Install cross-compilation tools (Linux only)
-        if: matrix.os == 'ubuntu-latest' && matrix.target != 'x86_64-unknown-linux-gnu'
-        run: |
-          # Install cross for building
-          cargo install cross --git https://github.com/cross-rs/cross
-
-          # Install target-specific binutils for stripping
-          sudo apt-get update
-          case "${{ matrix.target }}" in
-            aarch64-*-linux-*)
-              sudo apt-get install -y binutils-aarch64-linux-gnu
-              ;;
-            x86_64-*-musl)
-              sudo apt-get install -y musl-tools
-              ;;
-          esac
-
-      - name: Add macOS target (macOS only)
-        if: runner.os == 'macOS' && matrix.target != matrix.arch
-        run: |
-          # For cross-compiling between x86_64 and aarch64 on macOS
-          rustup target add ${{ matrix.target }}
-
-      - name: Install LLVM tools (macOS only)
-        if: runner.os == 'macOS'
-        run: |
-          # Install LLVM for llvm-objcopy (needed to strip LLVM bitcode from .a files)
-          brew install llvm
-          # Add LLVM tools to PATH
-          echo "$(brew --prefix llvm)/bin" >> $GITHUB_PATH
-
-      - name: Determine libdatadog version
-        id: version
-        shell: bash
-        env:
-          INPUT_VERSION: ${{ github.event.inputs.libdatadog_version }}
-        run: |
-          # If input version is provided, use it
-          if [ -n "$INPUT_VERSION" ]; then
-            version="$INPUT_VERSION"
-            echo "Using specified libdatadog version: $version"
-          else
-            # Use the main branch to get the latest code (not the latest release)
-            version="main"
-            echo "Using latest code from main branch (not latest release)"
-            echo "Using libdatadog version: $version"
-          fi
-
-          echo "LIBDATADOG_VERSION=$version" >> $GITHUB_OUTPUT
-          echo "Building libdatadog version: $version"
-
-      - name: Build ${{ matrix.platform }}
-        env:
-          LIBDATADOG_VERSION: ${{ steps.version.outputs.LIBDATADOG_VERSION }}
-          CARGO_BUILD_TARGET: ${{ matrix.target }}
-          FEATURE_PRESET: ${{ github.event.inputs.feature_preset || 'minimal' }}
-        run: |
-          if [ "$RUNNER_OS" == "Windows" ]; then
-            pwsh -Command "./build.ps1 -LibdatadogVersion '${LIBDATADOG_VERSION}' -Platform '${{ matrix.platform }}' -Features '${FEATURE_PRESET}' -Clean -OutputDir 'output/libdatadog-${{ matrix.platform }}'"
-          else
-            chmod +x build.sh
-            # For macOS, don't use cross tool - build natively or with native cargo cross-compilation
-            ./build.sh --version "$LIBDATADOG_VERSION" --platform "${{ matrix.platform }}" --features "$FEATURE_PRESET" --clean --output "output/libdatadog-${{ matrix.platform }}"
-          fi
-        shell: bash
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # v4.5.0
-        with:
-          name: libdatadog-${{ matrix.platform }}
-          path: output/libdatadog-${{ matrix.platform }}
-          if-no-files-found: error
+    with:
+      libdatadog_version: ${{ github.event.inputs.libdatadog_version || 'main' }}
+      feature_preset: ${{ github.event.inputs.feature_preset || 'minimal' }}
+      verify_artifacts: false
 
   create-release:
     name: Create GitHub Release
@@ -312,12 +191,12 @@ jobs:
           echo "Linux ARM64 MUSL SHA512: $SHA512_LINUX_ARM64_MUSL"
           echo "macOS x64 SHA512: $SHA512_MACOS_X64"
           echo "macOS ARM64 SHA512: $SHA512_MACOS_ARM64"
-      
+
       - name: Create release notes
         run: |
           cat > release-notes.md << 'NOTES_EOF'
           SHA256 checksums
-          ```          
+          ```
           ${{ steps.create_archives.outputs.SHA256_MACOS_ARM64 }} libdatadog-aarch64-apple-darwin.tar.gz
           ${{ steps.create_archives.outputs.SHA256_LINUX_ARM64_MUSL }} libdatadog-aarch64-alpine-linux-musl.tar.gz
           ${{ steps.create_archives.outputs.SHA256_LINUX_ARM64_GNU }} libdatadog-aarch64-unknown-linux-gnu.tar.gz
@@ -342,7 +221,7 @@ jobs:
 
           echo "Release notes created:"
           cat release-notes.md
-      
+
       - name: Create or Update Release
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:
