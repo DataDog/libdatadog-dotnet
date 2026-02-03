@@ -159,8 +159,6 @@ The libdatadog version is automatically determined at build time:
 
 This allows you to build and release the latest libdatadog code anytime, even if libdatadog hasn't released a new version yet.
 
-## Contributing
-
 For security vulnerabilities, please see our [Security Policy](SECURITY.md).
 
 ## Repository Structure
