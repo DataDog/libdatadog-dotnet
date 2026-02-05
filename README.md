@@ -129,28 +129,6 @@ Release artifacts are published as GitHub Release assets for all supported platf
 - `libdatadog-x86_64-apple-darwin.tar.gz` - macOS x64 (Intel)
 - `libdatadog-aarch64-apple-darwin.tar.gz` - macOS ARM64 (Apple Silicon)
 
-### Release Contents
-
-Each platform archive includes:
-
-```
-libdatadog-{platform}/
-├── include/datadog/          # C/C++ header files
-│   ├── common.h
-│   ├── profiling.h
-│   └── ...
-├── release/dynamic/          # Release shared libraries
-├── release/static/           # Release static libraries
-├── debug/dynamic/            # Debug shared libraries
-├── debug/static/             # Debug static libraries
-├── LICENSE                   # Apache 2.0 license
-├── NOTICE                    # Copyright notice
-├── LICENSE-3rdparty.csv      # Third-party component list
-└── LICENSE-3rdparty.yml      # Full license texts
-```
-
-Release notes include SHA256 and SHA512 checksums for all artifacts.
-
 ## Component Versions
 
 The libdatadog version is automatically determined at build time:
@@ -160,32 +138,6 @@ The libdatadog version is automatically determined at build time:
 This allows you to build and release the latest libdatadog code anytime, even if libdatadog hasn't released a new version yet.
 
 For security vulnerabilities, please see our [Security Policy](SECURITY.md).
-
-## Repository Structure
-
-```
-libdatadog-dotnet/
-├── .editorconfig                      # Editor configuration
-├── .github/
-│   ├── ISSUE_TEMPLATE/               # Issue templates
-│   │   ├── bug_report.md
-│   │   ├── feature_request.md
-│   │   ├── question.md
-│   │   └── config.yml
-│   ├── PULL_REQUEST_TEMPLATE.md      # PR template
-│   └── workflows/
-│       ├── build.yml                 # CI workflow for PRs
-│       └── release.yml               # Release workflow
-├── .gitignore                        # Git ignore rules
-├── build.ps1                         # Windows build script
-├── build.sh                          # Linux/macOS build script
-├── CODEOWNERS                        # Code ownership
-├── LICENSE                           # Apache 2.0 license
-├── LICENSE-3rdparty.csv              # Third-party components
-├── NOTICE                            # Copyright notice
-├── README.md                         # This file
-└── SECURITY.md                       # Security policy
-```
 
 ## License
 
