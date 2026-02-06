@@ -56,7 +56,7 @@ jobs:
         with:
           fetch-depth: 0  # Fetch all history for tag creation
 
-      - name: Validate and setup release version
+      - name: Validate release version
         id: setup_release
         run: |
           RELEASE_TAG="${{ github.event.inputs.release_version }}"
@@ -69,19 +69,9 @@ jobs:
             exit 1
           fi
 
-          # Check if tag already exists
-          if git rev-parse "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "Tag $RELEASE_TAG already exists"
-          else
-            echo "Creating tag $RELEASE_TAG"
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git tag -a "$RELEASE_TAG" -m "Release $RELEASE_TAG"
-            git push origin "$RELEASE_TAG"
-          fi
-
           echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_OUTPUT
           echo "Release tag: $RELEASE_TAG"
+          echo "Note: Tag will be created by GitHub API during release creation"
 
       - name: Download all artifacts
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
@@ -273,11 +263,12 @@ jobs:
             } catch (error) {
               if (error.status === 404) {
                 // Release doesn't exist, create it
-                console.log(`Creating new release ${tagName}`);
+                console.log(`Creating new release ${tagName} at commit ${context.sha}`);
                 release = await github.rest.repos.createRelease({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   tag_name: tagName,
+                  target_commitish: context.sha,
                   name: tagName,
                   body: body,
                   draft: false,
