@@ -84,6 +84,8 @@ Default is `minimal`.
 
 Releases are automated via GitHub Actions. Go to [Actions → Release](https://github.com/DataDog/libdatadog-dotnet/actions/workflows/release.yml) and click "Run workflow".
 
+**Prerequisites:** The repository requires a `RELEASE_TOKEN` secret (Personal Access Token with repo permissions) to create tags due to repository protection rules.
+
 ### Build Without Release (Testing)
 
 Build binaries without creating a GitHub release (useful for testing):
@@ -138,6 +140,20 @@ The libdatadog version is automatically determined at build time:
 This allows you to build and release the latest libdatadog code anytime, even if libdatadog hasn't released a new version yet.
 
 For security vulnerabilities, please see our [Security Policy](SECURITY.md).
+
+## Maintaining Third-Party Licenses
+
+The `LICENSE-3rdparty.csv` file lists all third-party dependencies from libdatadog. To regenerate it when libdatadog is updated:
+
+```bash
+# Ensure libdatadog is cloned/updated
+./build.sh --version main  # or specific version
+
+# Regenerate LICENSE-3rdparty.csv
+python generate-license-csv.py
+```
+
+This extracts and deduplicates components from `libdatadog/LICENSE-3rdparty.yml`.
 
 ## License
 
