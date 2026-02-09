@@ -141,20 +141,6 @@ This allows you to build and release the latest libdatadog code anytime, even if
 
 For security vulnerabilities, please see our [Security Policy](SECURITY.md).
 
-## Maintaining Third-Party Licenses
-
-The `LICENSE-3rdparty.csv` file lists all third-party dependencies from libdatadog. To regenerate it when libdatadog is updated:
-
-```bash
-# Ensure libdatadog is cloned/updated
-./build.sh --version main  # or specific version
-
-# Regenerate LICENSE-3rdparty.csv
-python generate-license-csv.py
-```
-
-This extracts and deduplicates components from `libdatadog/LICENSE-3rdparty.yml`.
-
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE) file.
