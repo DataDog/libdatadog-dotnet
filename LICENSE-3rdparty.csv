@@ -73,7 +73,7 @@ crossbeam-channel,https://github.com/crossbeam-rs/crossbeam,MIT OR Apache-2.0,Th
 crossbeam-queue,https://github.com/crossbeam-rs/crossbeam,MIT OR Apache-2.0,The Crossbeam Project Developers
 crossbeam-utils,https://github.com/crossbeam-rs/crossbeam,MIT OR Apache-2.0,The Crossbeam Project Developers
 crypto-common,https://github.com/RustCrypto/traits,MIT OR Apache-2.0,RustCrypto Developers
-current_platform,https://github.com/Shnatsel/current_platform,MIT OR Apache-2.0 OR Zlib,Daniel "Lokathor" Gee
+current_platform,https://github.com/Shnatsel/current_platform,MIT OR Apache-2.0 OR Zlib,Daniel Lokathor Gee
 darling,https://github.com/TedDriggs/darling,MIT,Ted Driggs
 darling_core,https://github.com/TedDriggs/darling,MIT,Ted Driggs
 darling_macro,https://github.com/TedDriggs/darling,MIT,Ted Driggs
@@ -269,7 +269,7 @@ same-file,https://github.com/BurntSushi/same-file,Unlicense/MIT,Andrew Gallant
 schannel,https://github.com/steffengy/schannel-rs,MIT,The schannel Authors
 schemars,https://github.com/GREsau/schemars,MIT,Graham Esau
 schemars_derive,https://github.com/GREsau/schemars,MIT,Graham Esau
-scopeguard,https://github.com/bluss/scopeguard,MIT OR Apache-2.0,Ulrik Sverdrup "bluss" and scopeguard developers
+scopeguard,https://github.com/bluss/scopeguard,MIT OR Apache-2.0,Ulrik Sverdrup and scopeguard developers
 security-framework,https://github.com/kornelski/rust-security-framework,MIT OR Apache-2.0,Steven Fackler
 security-framework-sys,https://github.com/kornelski/rust-security-framework,MIT OR Apache-2.0,Steven Fackler
 semver,https://github.com/dtolnay/semver,MIT OR Apache-2.0,The semver Authors

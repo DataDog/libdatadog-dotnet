@@ -127,11 +127,11 @@ def write_csv(components, output_path):
 
         # Write sorted components
         for component in sorted(components.values(), key=lambda x: x['component'].lower()):
-            # Escape commas in fields
-            comp = component['component'].replace(',', ';')
-            origin = component['origin'].replace(',', ';')
-            lic = component['license'].replace(',', ';')
-            copy = component['copyright'].replace(',', ';')
+            # Escape commas and remove quotes in fields (quotes cause CSV parsing issues)
+            comp = component['component'].replace(',', ';').replace('"', '')
+            origin = component['origin'].replace(',', ';').replace('"', '')
+            lic = component['license'].replace(',', ';').replace('"', '')
+            copy = component['copyright'].replace(',', ';').replace('"', '')
 
             f.write(f'{comp},{origin},{lic},{copy}\n')
 
