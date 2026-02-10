@@ -14,8 +14,18 @@ on:
         description: 'Libdatadog version to build (e.g., v25.0.0). Leave empty to use latest from libdatadog repository.'
         required: false
         default: ''
+      version_increment:
+        description: 'Version increment type (or leave empty to skip release)'
+        required: false
+        type: choice
+        options:
+          - ''
+          - patch
+          - minor
+          - major
+        default: ''
       release_version:
-        description: 'Release version to create (e.g., v1.0.0). Leave empty to skip release creation. Must be a valid semantic version tag.'
+        description: 'Manual version override (e.g., v1.0.0). Leave empty to auto-increment based on version_increment choice.'
         required: false
         default: ''
       feature_preset:
@@ -46,8 +56,8 @@ jobs:
   create-release:
     name: Create GitHub Release
     needs: build
-    # Only create releases when release_version parameter is provided
-    if: github.event.inputs.release_version != ''
+    # Only create releases when version_increment or release_version is provided
+    if: github.event.inputs.version_increment != '' || github.event.inputs.release_version != ''
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -56,13 +66,50 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          fetch-depth: 0  # Fetch all history for tag creation
+          fetch-depth: 0  # Fetch all history for tags
 
-      - name: Validate release version
+      - name: Determine release version
         id: setup_release
         run: |
-          RELEASE_TAG="${{ github.event.inputs.release_version }}"
-          echo "Creating release: $RELEASE_TAG"
+          # Check if manual version is provided
+          if [ -n "${{ github.event.inputs.release_version }}" ]; then
+            RELEASE_TAG="${{ github.event.inputs.release_version }}"
+            echo "Using manual version: $RELEASE_TAG"
+          else
+            # Auto-increment based on latest tag
+            INCREMENT_TYPE="${{ github.event.inputs.version_increment }}"
+
+            # Get latest tag
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            echo "Latest tag: $LATEST_TAG"
+
+            # Parse version (remove 'v' prefix)
+            VERSION=${LATEST_TAG#v}
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+            # Increment based on type
+            case "$INCREMENT_TYPE" in
+              major)
+                MAJOR=$((MAJOR + 1))
+                MINOR=0
+                PATCH=0
+                ;;
+              minor)
+                MINOR=$((MINOR + 1))
+                PATCH=0
+                ;;
+              patch)
+                PATCH=$((PATCH + 1))
+                ;;
+              *)
+                echo "Error: Invalid increment type: $INCREMENT_TYPE"
+                exit 1
+                ;;
+            esac
+
+            RELEASE_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+            echo "Auto-incremented version ($INCREMENT_TYPE): $RELEASE_TAG"
+          fi
 
           # Validate tag format (must be vX.Y.Z)
           if ! echo "$RELEASE_TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
@@ -73,7 +120,6 @@ jobs:
 
           echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_OUTPUT
           echo "Release tag: $RELEASE_TAG"
-          echo "Note: Tag will be created by GitHub API during release creation"
 
       - name: Download all artifacts
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
