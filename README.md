@@ -88,18 +88,14 @@ Releases are automated via GitHub Actions. Go to [Actions → Release](https://g
 
 ### Build Without Release (Testing)
 
-Build binaries without creating a GitHub release (useful for testing):
+To build and test without creating a release, use the **Build workflow** instead:
+- Go to **Actions → Build**
+- Triggered automatically on PRs and pushes to main
+- Can also be triggered manually via workflow_dispatch
 
-**Parameters:**
-- **Libdatadog version**: Leave empty for latest code, or specify a version (e.g., `v26.0.0`)
-- **Release version**: Leave **empty** to skip release creation
-- **Feature preset**: Choose `minimal`, `standard`, or `full`
+### Create a Release
 
-The workflow will build artifacts that you can download from the workflow run.
-
-### Build and Release
-
-Build binaries and create a GitHub release:
+The Release workflow builds binaries and creates a GitHub release:
 
 **Parameters:**
 - **Libdatadog version**: Leave empty for latest code, or specify a version (e.g., `v26.0.0`)
@@ -112,9 +108,11 @@ Build binaries and create a GitHub release:
 
 The workflow will:
 - Build binaries for all 8 platforms
-- Auto-increment version or use manual version
-- Create a git tag with the version
-- Create a GitHub release with all artifacts and checksums
+- Auto-increment version (or use manual override)
+- Create a git tag
+- Create a GitHub release with artifacts and checksums
+
+**Note:** This workflow always creates a release. For testing builds without releasing, use the Build workflow.
 
 ## Releases
 
