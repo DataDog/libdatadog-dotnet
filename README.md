@@ -103,17 +103,17 @@ Build binaries and create a GitHub release:
 
 **Parameters:**
 - **Libdatadog version**: Leave empty for latest code, or specify a version (e.g., `v26.0.0`)
-- **Version increment**: Choose `patch`, `minor`, or `major` to auto-increment from the latest tag
+- **Version increment**: Choose how to bump the version (default: `patch`)
   - `patch`: v1.0.9 → v1.0.10 (bug fixes)
   - `minor`: v1.0.9 → v1.1.0 (new features)
   - `major`: v1.0.9 → v2.0.0 (breaking changes)
-- **Release version** (optional): Manually specify a version tag (e.g., `v1.2.0`) to override auto-increment
+- **Release version** (optional): Manually specify version (e.g., `v1.2.0`) to override auto-increment
 - **Feature preset**: Choose `minimal`, `standard`, or `full`
 
 The workflow will:
 - Build binaries for all 8 platforms
-- Auto-increment version or use manual version
-- Create a git tag with the version
+- Auto-increment version from latest tag (or use manual override)
+- Create a git tag
 - Create a GitHub release with all artifacts and checksums
 
 ## Releases
