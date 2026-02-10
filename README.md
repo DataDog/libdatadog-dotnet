@@ -112,8 +112,8 @@ Build binaries and create a GitHub release:
 
 The workflow will:
 - Build binaries for all 8 platforms
-- Auto-increment version from latest tag (or use manual override)
-- Create a git tag
+- Auto-increment version or use manual version
+- Create a git tag with the version
 - Create a GitHub release with all artifacts and checksums
 
 ## Releases

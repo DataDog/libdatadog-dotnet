@@ -15,16 +15,17 @@ on:
         required: false
         default: ''
       version_increment:
-        description: 'Version increment type (ignored if release_version is provided)'
+        description: 'Version increment type (or leave empty to skip release)'
         required: false
         type: choice
         options:
+          - ''
           - patch
           - minor
           - major
-        default: 'patch'
+        default: ''
       release_version:
-        description: 'Manual version override (e.g., v1.0.0). Leave empty to auto-increment.'
+        description: 'Manual version override (e.g., v1.0.0). Leave empty to auto-increment based on version_increment choice.'
         required: false
         default: ''
       feature_preset:
