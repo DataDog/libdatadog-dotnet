@@ -549,7 +549,7 @@ if [ ${#GENERATED_HEADERS[@]} -gt 0 ]; then
         cd libdatadog/tools
         $CARGO_CMD build --release --bin dedup_headers
         if [ $? -eq 0 ]; then
-            DEDUP_TOOL="../../libdatadog/tools/target/release/dedup_headers"
+            DEDUP_TOOL="libdatadog/tools/target/release/dedup_headers"
         else
             print_yellow "    Warning: Failed to build dedup_headers tool. Headers may contain duplicate definitions."
         fi
