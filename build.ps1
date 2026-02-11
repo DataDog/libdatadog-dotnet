@@ -84,22 +84,24 @@ if (-not (Test-Path "libdatadog")) {
     Pop-Location
 }
 
+# Patch builder for musl cross-compilation support
+# The builder's musl.rs is missing -C target-feature=-crt-static which is required for cdylib
+# This is needed because we cross-compile from gnu to musl, unlike official builds which use Alpine
+Write-Host "Patching builder for musl cross-compilation..." -ForegroundColor Gray
+$muslRsPath = "libdatadog\builder\src\arch\musl.rs"
+if (Test-Path $muslRsPath) {
+    $content = Get-Content $muslRsPath -Raw
+    $content = $content -replace 'pub const RUSTFLAGS: \[&str; 4\] = \[', 'pub const RUSTFLAGS: [&str; 6] = ['
+    $content = $content -replace '(    "relocation-model=pic",)', "`$1`r`n    `"-C`",`r`n    `"target-feature=-crt-static`","
+    Set-Content $muslRsPath -Value $content -NoNewline
+}
+
 # Build using libdatadog builder crate
 Write-Host "Building libdatadog using builder crate..." -ForegroundColor Yellow
 
 # Create temporary build output directory
 $TempBuildDir = Join-Path $OutputDir "temp-build"
 New-Item -ItemType Directory -Force -Path $TempBuildDir | Out-Null
-
-# Enable dynamic linking for musl targets using target-specific environment variables
-# By default, musl uses static linking which prevents cdylib from being built
-# We use target-specific env vars because the builder overwrites generic RUSTFLAGS
-if ($env:CARGO_BUILD_TARGET -match "musl") {
-    $targetEnv = $env:CARGO_BUILD_TARGET.ToUpper().Replace("-", "_")
-    $envVarName = "CARGO_TARGET_${targetEnv}_RUSTFLAGS"
-    Set-Item -Path "env:$envVarName" -Value "-C target-feature=-crt-static"
-    Write-Host "  Enabling dynamic linking for musl target via $envVarName" -ForegroundColor Cyan
-}
 
 Push-Location libdatadog
 

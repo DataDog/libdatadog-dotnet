@@ -178,26 +178,19 @@ else
     cd ..
 fi
 
+# Patch builder for musl cross-compilation support
+# The builder's musl.rs is missing -C target-feature=-crt-static which is required for cdylib
+# This is needed because we cross-compile from gnu to musl, unlike official builds which use Alpine
+print_gray "Patching builder for musl cross-compilation..."
+sed -i 's/pub const RUSTFLAGS: \[&str; 4\] = \[/pub const RUSTFLAGS: [&str; 6] = [/' libdatadog/builder/src/arch/musl.rs
+sed -i '/relocation-model=pic",$/a\    "-C",\n    "target-feature=-crt-static",' libdatadog/builder/src/arch/musl.rs
+
 # Build using libdatadog builder crate
 print_yellow "Building libdatadog using builder crate..."
 
 # Create temporary build output directory
 TEMP_BUILD_DIR="$OUTPUT_DIR/temp-build"
 mkdir -p "$TEMP_BUILD_DIR"
-
-# Enable dynamic linking for musl targets using target-specific environment variables
-# By default, musl uses static linking which prevents cdylib from being built
-# We use target-specific env vars because the builder overwrites generic RUSTFLAGS
-if [ -n "$CARGO_BUILD_TARGET" ]; then
-    case "$CARGO_BUILD_TARGET" in
-        *-musl)
-            # Convert target triple to environment variable format (replace - with _)
-            TARGET_ENV=$(echo "$CARGO_BUILD_TARGET" | tr '[:lower:]-' '[:upper:]_')
-            export "CARGO_TARGET_${TARGET_ENV}_RUSTFLAGS=-C target-feature=-crt-static"
-            print_cyan "  Enabling dynamic linking for musl target via CARGO_TARGET_${TARGET_ENV}_RUSTFLAGS"
-            ;;
-    esac
-fi
 
 cd libdatadog
 
