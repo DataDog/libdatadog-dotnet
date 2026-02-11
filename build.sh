@@ -549,12 +549,28 @@ if [ ${#GENERATED_HEADERS[@]} -gt 0 ]; then
         cd libdatadog/tools
         $CARGO_CMD build --release --bin dedup_headers
         if [ $? -eq 0 ]; then
-            # Binary is built in workspace target directory, not tools target directory
-            DEDUP_TOOL="libdatadog/target/release/dedup_headers"
+            cd ../..
+            # Debug: Show where files actually are
+            print_gray "    Checking for dedup_headers binary..."
+            print_gray "    Contents of libdatadog/target/release/:"
+            ls -la libdatadog/target/release/dedup* 2>&1 || echo "    No dedup* files in libdatadog/target/release/"
+            print_gray "    Contents of libdatadog/tools/target/release/:"
+            ls -la libdatadog/tools/target/release/dedup* 2>&1 || echo "    No dedup* files in libdatadog/tools/target/release/"
+
+            # Check both possible locations
+            if [ -f "libdatadog/target/release/dedup_headers" ]; then
+                DEDUP_TOOL="libdatadog/target/release/dedup_headers"
+                print_gray "    Found at: $DEDUP_TOOL"
+            elif [ -f "libdatadog/tools/target/release/dedup_headers" ]; then
+                DEDUP_TOOL="libdatadog/tools/target/release/dedup_headers"
+                print_gray "    Found at: $DEDUP_TOOL"
+            else
+                print_yellow "    Warning: dedup_headers binary not found after build"
+            fi
         else
             print_yellow "    Warning: Failed to build dedup_headers tool. Headers may contain duplicate definitions."
+            cd ../..
         fi
-        cd ../..
     fi
 
     # Use the dedup_headers tool

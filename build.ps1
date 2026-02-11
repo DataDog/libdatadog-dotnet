@@ -288,12 +288,28 @@ if ($generatedHeaders.Count -gt 0) {
         Push-Location libdatadog\tools
         cargo build --release --bin dedup_headers
         if ($LASTEXITCODE -eq 0) {
-            # Binary is built in workspace target directory, not tools target directory
-            $toolPath = "libdatadog\target\release\dedup_headers.exe"
+            Pop-Location
+            # Debug: Show where files actually are
+            Write-Host "    Checking for dedup_headers binary..." -ForegroundColor Gray
+            Write-Host "    Contents of libdatadog\target\release\:" -ForegroundColor Gray
+            Get-ChildItem -Path "libdatadog\target\release\dedup*" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "      $_" -ForegroundColor Gray }
+            Write-Host "    Contents of libdatadog\tools\target\release\:" -ForegroundColor Gray
+            Get-ChildItem -Path "libdatadog\tools\target\release\dedup*" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "      $_" -ForegroundColor Gray }
+
+            # Check both possible locations
+            if (Test-Path "libdatadog\target\release\dedup_headers.exe") {
+                $toolPath = "libdatadog\target\release\dedup_headers.exe"
+                Write-Host "    Found at: $toolPath" -ForegroundColor Gray
+            } elseif (Test-Path "libdatadog\tools\target\release\dedup_headers.exe") {
+                $toolPath = "libdatadog\tools\target\release\dedup_headers.exe"
+                Write-Host "    Found at: $toolPath" -ForegroundColor Gray
+            } else {
+                Write-Host "    Warning: dedup_headers binary not found after build" -ForegroundColor Yellow
+            }
         } else {
+            Pop-Location
             Write-Host "    Warning: Failed to build dedup_headers tool. Headers may contain duplicate definitions." -ForegroundColor Yellow
         }
-        Pop-Location
     }
 
     # Use the dedup_headers tool
