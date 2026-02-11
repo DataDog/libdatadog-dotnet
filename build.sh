@@ -185,6 +185,17 @@ print_yellow "Building libdatadog using builder crate..."
 TEMP_BUILD_DIR="$OUTPUT_DIR/temp-build"
 mkdir -p "$TEMP_BUILD_DIR"
 
+# Enable dynamic linking for musl targets
+# By default, musl uses static linking which prevents cdylib from being built
+if [ -n "$CARGO_BUILD_TARGET" ]; then
+    case "$CARGO_BUILD_TARGET" in
+        *-musl)
+            export RUSTFLAGS="${RUSTFLAGS:-} -C target-feature=-crt-static"
+            print_cyan "  Enabling dynamic linking for musl target"
+            ;;
+    esac
+fi
+
 cd libdatadog
 
 # Prepare builder command
