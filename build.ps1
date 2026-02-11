@@ -84,6 +84,22 @@ if (-not (Test-Path "libdatadog")) {
     Pop-Location
 }
 
+# Create cargo config for musl targets to enable dynamic linking
+# This is needed because musl defaults to static linking which doesn't support cdylib
+Write-Host "Configuring musl targets for dynamic linking..." -ForegroundColor Gray
+New-Item -ItemType Directory -Force -Path "libdatadog\.cargo" | Out-Null
+@"
+# SPDX-License-Identifier: Apache-2.0
+
+# Enable dynamic linking for musl targets
+# By default, musl uses static linking which prevents building cdylib (shared libraries)
+[target.x86_64-unknown-linux-musl]
+rustflags = ["-C", "target-feature=-crt-static"]
+
+[target.aarch64-unknown-linux-musl]
+rustflags = ["-C", "target-feature=-crt-static"]
+"@ | Out-File -FilePath "libdatadog\.cargo\config.toml" -Encoding UTF8
+
 # Build using libdatadog builder crate
 Write-Host "Building libdatadog using builder crate..." -ForegroundColor Yellow
 

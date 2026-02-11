@@ -178,6 +178,22 @@ else
     cd ..
 fi
 
+# Create cargo config for musl targets to enable dynamic linking
+# This is needed because musl defaults to static linking which doesn't support cdylib
+print_gray "Configuring musl targets for dynamic linking..."
+mkdir -p libdatadog/.cargo
+cat > libdatadog/.cargo/config.toml << 'EOF'
+# SPDX-License-Identifier: Apache-2.0
+
+# Enable dynamic linking for musl targets
+# By default, musl uses static linking which prevents building cdylib (shared libraries)
+[target.x86_64-unknown-linux-musl]
+rustflags = ["-C", "target-feature=-crt-static"]
+
+[target.aarch64-unknown-linux-musl]
+rustflags = ["-C", "target-feature=-crt-static"]
+EOF
+
 # Build using libdatadog builder crate
 print_yellow "Building libdatadog using builder crate..."
 
