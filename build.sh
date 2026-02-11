@@ -532,21 +532,33 @@ if [ ${#GENERATED_HEADERS[@]} -gt 0 ]; then
     print_gray "  Deduplicating headers..."
 
     # Build the dedup_headers tool from libdatadog/tools if needed
-    if [ ! -f "libdatadog/target/release/dedup_headers" ] && [ ! -f "libdatadog/target/debug/dedup_headers" ]; then
+    # Check both workspace target and tools target locations
+    DEDUP_TOOL=""
+    if [ -f "libdatadog/target/release/dedup_headers" ]; then
+        DEDUP_TOOL="libdatadog/target/release/dedup_headers"
+    elif [ -f "libdatadog/target/debug/dedup_headers" ]; then
+        DEDUP_TOOL="libdatadog/target/debug/dedup_headers"
+    elif [ -f "libdatadog/tools/target/release/dedup_headers" ]; then
+        DEDUP_TOOL="libdatadog/tools/target/release/dedup_headers"
+    elif [ -f "libdatadog/tools/target/debug/dedup_headers" ]; then
+        DEDUP_TOOL="libdatadog/tools/target/debug/dedup_headers"
+    fi
+
+    if [ -z "$DEDUP_TOOL" ]; then
         print_gray "    Building dedup_headers tool..."
-        cd libdatadog
-        $CARGO_CMD build --release --bin dedup_headers --manifest-path tools/Cargo.toml
-        if [ $? -ne 0 ]; then
+        cd libdatadog/tools
+        $CARGO_CMD build --release --bin dedup_headers
+        if [ $? -eq 0 ]; then
+            DEDUP_TOOL="../../libdatadog/tools/target/release/dedup_headers"
+        else
             print_yellow "    Warning: Failed to build dedup_headers tool. Headers may contain duplicate definitions."
         fi
-        cd ..
+        cd ../..
     fi
 
     # Use the dedup_headers tool
-    if [ -f "libdatadog/target/release/dedup_headers" ]; then
-        ./libdatadog/target/release/dedup_headers "$PACKAGE_DIR/include/datadog/common.h" "${GENERATED_HEADERS[@]}"
-    elif [ -f "libdatadog/target/debug/dedup_headers" ]; then
-        ./libdatadog/target/debug/dedup_headers "$PACKAGE_DIR/include/datadog/common.h" "${GENERATED_HEADERS[@]}"
+    if [ -n "$DEDUP_TOOL" ]; then
+        ./$DEDUP_TOOL "$PACKAGE_DIR/include/datadog/common.h" "${GENERATED_HEADERS[@]}"
     else
         print_yellow "  Warning: dedup_headers tool not found. Headers may contain duplicate definitions."
     fi

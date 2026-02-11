@@ -138,13 +138,13 @@ jobs:
           output_dir="output/libdatadog-${{ matrix.platform }}"
 
           if [ "$RUNNER_OS" == "Windows" ]; then
-            # Check for DLL
-            if [ ! -f "$output_dir/lib/datadog_profiling.dll" ]; then
-              echo "Error: Release DLL not found at $output_dir/lib/datadog_profiling.dll"
+            # Check for Windows DLL (in release/dynamic for Windows builds)
+            if [ ! -f "$output_dir/release/dynamic/datadog_profiling_ffi.dll" ]; then
+              echo "Error: Release DLL not found at $output_dir/release/dynamic/datadog_profiling_ffi.dll"
               exit 1
             fi
           else
-            # Check for shared library
+            # Check for shared library (in lib for Linux/macOS builds)
             if [ ! -f "$output_dir/lib/libdatadog_profiling.so" ] && [ ! -f "$output_dir/lib/libdatadog_profiling.dylib" ]; then
               echo "Error: Shared library not found"
               exit 1

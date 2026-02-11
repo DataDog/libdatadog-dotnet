@@ -266,26 +266,39 @@ if ($generatedHeaders.Count -gt 0) {
     Write-Host "  Deduplicating headers..." -ForegroundColor Gray
 
     # Build the dedup_headers tool from libdatadog/tools if needed
+    # Check both workspace target and tools target locations
     $dedupExe = "libdatadog\target\release\dedup_headers.exe"
     $dedupExeDebug = "libdatadog\target\debug\dedup_headers.exe"
+    $dedupExeTools = "libdatadog\tools\target\release\dedup_headers.exe"
+    $dedupExeToolsDebug = "libdatadog\tools\target\debug\dedup_headers.exe"
 
-    if (-not (Test-Path $dedupExe) -and -not (Test-Path $dedupExeDebug)) {
+    $toolPath = $null
+    if (Test-Path $dedupExe) {
+        $toolPath = $dedupExe
+    } elseif (Test-Path $dedupExeDebug) {
+        $toolPath = $dedupExeDebug
+    } elseif (Test-Path $dedupExeTools) {
+        $toolPath = $dedupExeTools
+    } elseif (Test-Path $dedupExeToolsDebug) {
+        $toolPath = $dedupExeToolsDebug
+    }
+
+    if (-not $toolPath) {
         Write-Host "    Building dedup_headers tool..." -ForegroundColor Gray
-        Push-Location libdatadog
-        cargo build --release --bin dedup_headers --manifest-path tools\Cargo.toml
-        if ($LASTEXITCODE -ne 0) {
+        Push-Location libdatadog\tools
+        cargo build --release --bin dedup_headers
+        if ($LASTEXITCODE -eq 0) {
+            $toolPath = "..\tools\target\release\dedup_headers.exe"
+        } else {
             Write-Host "    Warning: Failed to build dedup_headers tool. Headers may contain duplicate definitions." -ForegroundColor Yellow
         }
         Pop-Location
     }
 
     # Use the dedup_headers tool
-    if (Test-Path $dedupExe) {
+    if ($toolPath) {
         $headerArgs = @("$PackageDir\include\datadog\common.h") + $generatedHeaders
-        & ".\$dedupExe" $headerArgs
-    } elseif (Test-Path $dedupExeDebug) {
-        $headerArgs = @("$PackageDir\include\datadog\common.h") + $generatedHeaders
-        & ".\$dedupExeDebug" $headerArgs
+        & ".\$toolPath" $headerArgs
     } else {
         Write-Host "  Warning: dedup_headers tool not found. Headers may contain duplicate definitions." -ForegroundColor Yellow
     }
