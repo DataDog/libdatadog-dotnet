@@ -178,22 +178,6 @@ else
     cd ..
 fi
 
-# Create cargo config for musl targets to enable dynamic linking
-# This is needed because musl defaults to static linking which doesn't support cdylib
-print_gray "Configuring musl targets for dynamic linking..."
-mkdir -p libdatadog/.cargo
-cat > libdatadog/.cargo/config.toml << 'EOF'
-# SPDX-License-Identifier: Apache-2.0
-
-# Enable dynamic linking for musl targets
-# By default, musl uses static linking which prevents building cdylib (shared libraries)
-[target.x86_64-unknown-linux-musl]
-rustflags = ["-C", "target-feature=-crt-static"]
-
-[target.aarch64-unknown-linux-musl]
-rustflags = ["-C", "target-feature=-crt-static"]
-EOF
-
 # Build using libdatadog builder crate
 print_yellow "Building libdatadog using builder crate..."
 
@@ -201,13 +185,16 @@ print_yellow "Building libdatadog using builder crate..."
 TEMP_BUILD_DIR="$OUTPUT_DIR/temp-build"
 mkdir -p "$TEMP_BUILD_DIR"
 
-# Enable dynamic linking for musl targets
+# Enable dynamic linking for musl targets using target-specific environment variables
 # By default, musl uses static linking which prevents cdylib from being built
+# We use target-specific env vars because the builder overwrites generic RUSTFLAGS
 if [ -n "$CARGO_BUILD_TARGET" ]; then
     case "$CARGO_BUILD_TARGET" in
         *-musl)
-            export RUSTFLAGS="${RUSTFLAGS:-} -C target-feature=-crt-static"
-            print_cyan "  Enabling dynamic linking for musl target"
+            # Convert target triple to environment variable format (replace - with _)
+            TARGET_ENV=$(echo "$CARGO_BUILD_TARGET" | tr '[:lower:]-' '[:upper:]_')
+            export "CARGO_TARGET_${TARGET_ENV}_RUSTFLAGS=-C target-feature=-crt-static"
+            print_cyan "  Enabling dynamic linking for musl target via CARGO_TARGET_${TARGET_ENV}_RUSTFLAGS"
             ;;
     esac
 fi

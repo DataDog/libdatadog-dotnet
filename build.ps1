@@ -84,28 +84,22 @@ if (-not (Test-Path "libdatadog")) {
     Pop-Location
 }
 
-# Create cargo config for musl targets to enable dynamic linking
-# This is needed because musl defaults to static linking which doesn't support cdylib
-Write-Host "Configuring musl targets for dynamic linking..." -ForegroundColor Gray
-New-Item -ItemType Directory -Force -Path "libdatadog\.cargo" | Out-Null
-@"
-# SPDX-License-Identifier: Apache-2.0
-
-# Enable dynamic linking for musl targets
-# By default, musl uses static linking which prevents building cdylib (shared libraries)
-[target.x86_64-unknown-linux-musl]
-rustflags = ["-C", "target-feature=-crt-static"]
-
-[target.aarch64-unknown-linux-musl]
-rustflags = ["-C", "target-feature=-crt-static"]
-"@ | Out-File -FilePath "libdatadog\.cargo\config.toml" -Encoding UTF8
-
 # Build using libdatadog builder crate
 Write-Host "Building libdatadog using builder crate..." -ForegroundColor Yellow
 
 # Create temporary build output directory
 $TempBuildDir = Join-Path $OutputDir "temp-build"
 New-Item -ItemType Directory -Force -Path $TempBuildDir | Out-Null
+
+# Enable dynamic linking for musl targets using target-specific environment variables
+# By default, musl uses static linking which prevents cdylib from being built
+# We use target-specific env vars because the builder overwrites generic RUSTFLAGS
+if ($env:CARGO_BUILD_TARGET -match "musl") {
+    $targetEnv = $env:CARGO_BUILD_TARGET.ToUpper().Replace("-", "_")
+    $envVarName = "CARGO_TARGET_${targetEnv}_RUSTFLAGS"
+    Set-Item -Path "env:$envVarName" -Value "-C target-feature=-crt-static"
+    Write-Host "  Enabling dynamic linking for musl target via $envVarName" -ForegroundColor Cyan
+}
 
 Push-Location libdatadog
 
