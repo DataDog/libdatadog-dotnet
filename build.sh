@@ -188,21 +188,35 @@ mkdir -p "$TEMP_BUILD_DIR"
 cd libdatadog
 
 # Prepare builder command
+# Note: The builder binary must be built for the native host architecture,
+# not the target architecture. We pass the target to the builder via --target.
 BUILDER_CMD="cargo run --release --bin release $CARGO_FEATURES --"
 
 # Add output directory
 BUILDER_CMD="$BUILDER_CMD --out \"$TEMP_BUILD_DIR\""
 
 # Add target if cross-compiling
+TARGET_ARG=""
 if [ -n "$CARGO_BUILD_TARGET" ]; then
     print_cyan "  Target architecture: $CARGO_BUILD_TARGET"
-    BUILDER_CMD="$BUILDER_CMD --target $CARGO_BUILD_TARGET"
+    TARGET_ARG="--target $CARGO_BUILD_TARGET"
+    BUILDER_CMD="$BUILDER_CMD $TARGET_ARG"
 fi
 
 print_gray "  Running builder..."
 print_gray "  Command: $BUILDER_CMD"
+
+# Unset CARGO_BUILD_TARGET temporarily so the builder binary builds natively
+SAVED_CARGO_BUILD_TARGET="$CARGO_BUILD_TARGET"
+unset CARGO_BUILD_TARGET
+
 eval $BUILDER_CMD
-if [ $? -ne 0 ]; then
+BUILD_EXIT_CODE=$?
+
+# Restore CARGO_BUILD_TARGET
+export CARGO_BUILD_TARGET="$SAVED_CARGO_BUILD_TARGET"
+
+if [ $BUILD_EXIT_CODE -ne 0 ]; then
     print_red "Error: Builder failed"
     exit 1
 fi
