@@ -218,9 +218,9 @@ if (-not (Test-Path "$PackageDir/include/datadog/profiling.h")) {
 Write-Host "  Copying license files..." -ForegroundColor Gray
 # Copy LICENSE from libdatadog (Apache 2.0)
 Copy-Item "libdatadog/LICENSE" -Destination "$PackageDir/" -ErrorAction SilentlyContinue
-# Copy NOTICE from libdatadog-dotnet root
-if (Test-Path "NOTICE") {
-    Copy-Item "NOTICE" -Destination "$PackageDir/" -ErrorAction SilentlyContinue
+# Copy NOTICE from libdatadog
+if (Test-Path "libdatadog/NOTICE") {
+    Copy-Item "libdatadog/NOTICE" -Destination "$PackageDir/" -ErrorAction SilentlyContinue
 }
 # Copy LICENSE-3rdparty.csv from libdatadog-dotnet root (summary of components)
 if (Test-Path "LICENSE-3rdparty.csv") {
