@@ -288,7 +288,8 @@ if ($generatedHeaders.Count -gt 0) {
         Push-Location libdatadog\tools
         cargo build --release --bin dedup_headers
         if ($LASTEXITCODE -eq 0) {
-            $toolPath = "libdatadog\tools\target\release\dedup_headers.exe"
+            # Binary is built in workspace target directory, not tools target directory
+            $toolPath = "libdatadog\target\release\dedup_headers.exe"
         } else {
             Write-Host "    Warning: Failed to build dedup_headers tool. Headers may contain duplicate definitions." -ForegroundColor Yellow
         }
