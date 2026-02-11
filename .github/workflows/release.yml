@@ -230,6 +230,13 @@ jobs:
       - name: Create release notes
         run: |
           cat > release-notes.md << 'NOTES_EOF'
+          ## Build Information
+
+          - **Libdatadog version**: ${{ github.event.inputs.libdatadog_version || 'main' }}
+          - **Feature preset**: ${{ github.event.inputs.feature_preset }}
+
+          ## Checksums
+
           SHA256 checksums
           ```
           ${{ steps.create_archives.outputs.SHA256_MACOS_ARM64 }} libdatadog-aarch64-apple-darwin.tar.gz
