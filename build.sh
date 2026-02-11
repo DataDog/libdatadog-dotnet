@@ -215,10 +215,11 @@ print_gray "  Builder output: $TEMP_BUILD_DIR"
 # Package the binaries
 print_yellow "Packaging binaries..."
 
-# Copy builder output to final package directory
+# Copy builder output contents to final package directory
 PACKAGE_DIR="$OUTPUT_DIR/libdatadog-$PLATFORM"
 print_gray "  Copying builder output to package directory..."
-cp -r "$TEMP_BUILD_DIR" "$PACKAGE_DIR"
+mkdir -p "$PACKAGE_DIR"
+cp -r "$TEMP_BUILD_DIR"/* "$PACKAGE_DIR"/
 
 # Add our LICENSE-3rdparty.csv (summary) alongside the full yml from libdatadog
 print_gray "  Adding LICENSE-3rdparty.csv..."

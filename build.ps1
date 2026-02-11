@@ -122,10 +122,11 @@ Write-Host "  Builder output: $TempBuildDir" -ForegroundColor Gray
 # Package the binaries
 Write-Host "Packaging binaries..." -ForegroundColor Yellow
 
-# Copy builder output to final package directory
+# Copy builder output contents to final package directory
 $PackageDir = Join-Path $OutputDir "libdatadog-$Platform"
 Write-Host "  Copying builder output to package directory..." -ForegroundColor Gray
-Copy-Item -Path $TempBuildDir -Destination $PackageDir -Recurse -Force
+New-Item -ItemType Directory -Force -Path $PackageDir | Out-Null
+Copy-Item -Path "$TempBuildDir\*" -Destination $PackageDir -Recurse -Force
 
 # Add our LICENSE-3rdparty.csv (summary) alongside the full yml from libdatadog
 Write-Host "  Adding LICENSE-3rdparty.csv..." -ForegroundColor Gray
