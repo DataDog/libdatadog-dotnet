@@ -533,15 +533,24 @@ if [ ${#GENERATED_HEADERS[@]} -gt 0 ]; then
 
     # Build the dedup_headers tool from libdatadog/tools if needed
     # Check both workspace target and tools target locations
+    # When CARGO_BUILD_TARGET is set, binaries go to target/$CARGO_BUILD_TARGET/release/
     DEDUP_TOOL=""
-    if [ -f "libdatadog/target/release/dedup_headers" ]; then
+
+    # Determine the target directory based on CARGO_BUILD_TARGET
+    if [ -n "$CARGO_BUILD_TARGET" ]; then
+        TARGET_DIR="libdatadog/target/$CARGO_BUILD_TARGET"
+    else
+        TARGET_DIR="libdatadog/target"
+    fi
+
+    if [ -f "$TARGET_DIR/release/dedup_headers" ]; then
+        DEDUP_TOOL="$TARGET_DIR/release/dedup_headers"
+    elif [ -f "$TARGET_DIR/debug/dedup_headers" ]; then
+        DEDUP_TOOL="$TARGET_DIR/debug/dedup_headers"
+    elif [ -f "libdatadog/target/release/dedup_headers" ]; then
         DEDUP_TOOL="libdatadog/target/release/dedup_headers"
     elif [ -f "libdatadog/target/debug/dedup_headers" ]; then
         DEDUP_TOOL="libdatadog/target/debug/dedup_headers"
-    elif [ -f "libdatadog/tools/target/release/dedup_headers" ]; then
-        DEDUP_TOOL="libdatadog/tools/target/release/dedup_headers"
-    elif [ -f "libdatadog/tools/target/debug/dedup_headers" ]; then
-        DEDUP_TOOL="libdatadog/tools/target/debug/dedup_headers"
     fi
 
     if [ -z "$DEDUP_TOOL" ]; then
@@ -550,28 +559,12 @@ if [ ${#GENERATED_HEADERS[@]} -gt 0 ]; then
         $CARGO_CMD build --release --bin dedup_headers
         if [ $? -eq 0 ]; then
             cd ../..
-            # Debug: Show where files actually are
-            print_gray "    Checking for dedup_headers binary..."
-            print_gray "    Searching for dedup_headers in libdatadog/..."
-            find libdatadog -name "dedup_headers" -o -name "dedup_headers.exe" 2>/dev/null || echo "    No dedup_headers binary found in libdatadog/"
-
-            print_gray "    Contents of libdatadog/target/release/:"
-            ls -la libdatadog/target/release/dedup* 2>&1 || echo "    No dedup* files in libdatadog/target/release/"
-            print_gray "    Contents of libdatadog/tools/target/release/:"
-            ls -la libdatadog/tools/target/release/dedup* 2>&1 || echo "    No dedup* files in libdatadog/tools/target/release/"
-
-            print_gray "    Listing all executables in libdatadog/target/release/:"
-            ls -la libdatalog/target/release/ 2>&1 | grep -E "^-rwx" | head -20 || echo "    No executables found"
-
-            # Check both possible locations
-            if [ -f "libdatadog/target/release/dedup_headers" ]; then
-                DEDUP_TOOL="libdatadog/target/release/dedup_headers"
-                print_gray "    Found at: $DEDUP_TOOL"
-            elif [ -f "libdatadog/tools/target/release/dedup_headers" ]; then
-                DEDUP_TOOL="libdatadog/tools/target/release/dedup_headers"
+            # After building, check in the target-specific directory
+            if [ -f "$TARGET_DIR/release/dedup_headers" ]; then
+                DEDUP_TOOL="$TARGET_DIR/release/dedup_headers"
                 print_gray "    Found at: $DEDUP_TOOL"
             else
-                print_yellow "    Warning: dedup_headers binary not found after build"
+                print_yellow "    Warning: dedup_headers binary not found at expected location: $TARGET_DIR/release/dedup_headers"
             fi
         else
             print_yellow "    Warning: Failed to build dedup_headers tool. Headers may contain duplicate definitions."

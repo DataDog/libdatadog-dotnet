@@ -266,21 +266,25 @@ if ($generatedHeaders.Count -gt 0) {
     Write-Host "  Deduplicating headers..." -ForegroundColor Gray
 
     # Build the dedup_headers tool from libdatadog/tools if needed
-    # Check both workspace target and tools target locations
-    $dedupExe = "libdatadog\target\release\dedup_headers.exe"
-    $dedupExeDebug = "libdatadog\target\debug\dedup_headers.exe"
-    $dedupExeTools = "libdatadog\tools\target\release\dedup_headers.exe"
-    $dedupExeToolsDebug = "libdatadog\tools\target\debug\dedup_headers.exe"
-
+    # When CARGO_BUILD_TARGET is set, binaries go to target/$env:CARGO_BUILD_TARGET/release/
     $toolPath = $null
-    if (Test-Path $dedupExe) {
-        $toolPath = $dedupExe
-    } elseif (Test-Path $dedupExeDebug) {
-        $toolPath = $dedupExeDebug
-    } elseif (Test-Path $dedupExeTools) {
-        $toolPath = $dedupExeTools
-    } elseif (Test-Path $dedupExeToolsDebug) {
-        $toolPath = $dedupExeToolsDebug
+
+    # Determine the target directory based on CARGO_BUILD_TARGET
+    if ($env:CARGO_BUILD_TARGET) {
+        $targetDir = "libdatadog\target\$env:CARGO_BUILD_TARGET"
+    } else {
+        $targetDir = "libdatadog\target"
+    }
+
+    # Check for the tool in the target-specific directory first, then fallback to default
+    if (Test-Path "$targetDir\release\dedup_headers.exe") {
+        $toolPath = "$targetDir\release\dedup_headers.exe"
+    } elseif (Test-Path "$targetDir\debug\dedup_headers.exe") {
+        $toolPath = "$targetDir\debug\dedup_headers.exe"
+    } elseif (Test-Path "libdatadog\target\release\dedup_headers.exe") {
+        $toolPath = "libdatadog\target\release\dedup_headers.exe"
+    } elseif (Test-Path "libdatadog\target\debug\dedup_headers.exe") {
+        $toolPath = "libdatadog\target\debug\dedup_headers.exe"
     }
 
     if (-not $toolPath) {
@@ -289,28 +293,12 @@ if ($generatedHeaders.Count -gt 0) {
         cargo build --release --bin dedup_headers
         if ($LASTEXITCODE -eq 0) {
             Pop-Location
-            # Debug: Show where files actually are
-            Write-Host "    Checking for dedup_headers binary..." -ForegroundColor Gray
-            Write-Host "    Searching for dedup_headers in libdatadog\..." -ForegroundColor Gray
-            Get-ChildItem -Path "libdatadog" -Recurse -Filter "dedup_headers*" -File -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "      Found: $($_.FullName)" -ForegroundColor Cyan }
-
-            Write-Host "    Contents of libdatadog\target\release\:" -ForegroundColor Gray
-            Get-ChildItem -Path "libdatadog\target\release\dedup*" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "      $_" -ForegroundColor Gray }
-            Write-Host "    Contents of libdatadog\tools\target\release\:" -ForegroundColor Gray
-            Get-ChildItem -Path "libdatadog\tools\target\release\dedup*" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "      $_" -ForegroundColor Gray }
-
-            Write-Host "    Listing .exe files in libdatadog\target\release\:" -ForegroundColor Gray
-            Get-ChildItem -Path "libdatadog\target\release\*.exe" -ErrorAction SilentlyContinue | Select-Object -First 20 | ForEach-Object { Write-Host "      $($_.Name)" -ForegroundColor Gray }
-
-            # Check both possible locations
-            if (Test-Path "libdatadog\target\release\dedup_headers.exe") {
-                $toolPath = "libdatadog\target\release\dedup_headers.exe"
-                Write-Host "    Found at: $toolPath" -ForegroundColor Gray
-            } elseif (Test-Path "libdatadog\tools\target\release\dedup_headers.exe") {
-                $toolPath = "libdatadog\tools\target\release\dedup_headers.exe"
+            # After building, check in the target-specific directory
+            if (Test-Path "$targetDir\release\dedup_headers.exe") {
+                $toolPath = "$targetDir\release\dedup_headers.exe"
                 Write-Host "    Found at: $toolPath" -ForegroundColor Gray
             } else {
-                Write-Host "    Warning: dedup_headers binary not found after build" -ForegroundColor Yellow
+                Write-Host "    Warning: dedup_headers binary not found at expected location: $targetDir\release\dedup_headers.exe" -ForegroundColor Yellow
             }
         } else {
             Pop-Location
