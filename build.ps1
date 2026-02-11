@@ -291,10 +291,16 @@ if ($generatedHeaders.Count -gt 0) {
             Pop-Location
             # Debug: Show where files actually are
             Write-Host "    Checking for dedup_headers binary..." -ForegroundColor Gray
+            Write-Host "    Searching for dedup_headers in libdatadog\..." -ForegroundColor Gray
+            Get-ChildItem -Path "libdatadog" -Recurse -Filter "dedup_headers*" -File -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "      Found: $($_.FullName)" -ForegroundColor Cyan }
+
             Write-Host "    Contents of libdatadog\target\release\:" -ForegroundColor Gray
             Get-ChildItem -Path "libdatadog\target\release\dedup*" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "      $_" -ForegroundColor Gray }
             Write-Host "    Contents of libdatadog\tools\target\release\:" -ForegroundColor Gray
             Get-ChildItem -Path "libdatadog\tools\target\release\dedup*" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "      $_" -ForegroundColor Gray }
+
+            Write-Host "    Listing .exe files in libdatadog\target\release\:" -ForegroundColor Gray
+            Get-ChildItem -Path "libdatadog\target\release\*.exe" -ErrorAction SilentlyContinue | Select-Object -First 20 | ForEach-Object { Write-Host "      $($_.Name)" -ForegroundColor Gray }
 
             # Check both possible locations
             if (Test-Path "libdatadog\target\release\dedup_headers.exe") {

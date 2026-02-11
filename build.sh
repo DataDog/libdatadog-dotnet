@@ -552,10 +552,16 @@ if [ ${#GENERATED_HEADERS[@]} -gt 0 ]; then
             cd ../..
             # Debug: Show where files actually are
             print_gray "    Checking for dedup_headers binary..."
+            print_gray "    Searching for dedup_headers in libdatadog/..."
+            find libdatadog -name "dedup_headers" -o -name "dedup_headers.exe" 2>/dev/null || echo "    No dedup_headers binary found in libdatadog/"
+
             print_gray "    Contents of libdatadog/target/release/:"
             ls -la libdatadog/target/release/dedup* 2>&1 || echo "    No dedup* files in libdatadog/target/release/"
             print_gray "    Contents of libdatadog/tools/target/release/:"
             ls -la libdatadog/tools/target/release/dedup* 2>&1 || echo "    No dedup* files in libdatadog/tools/target/release/"
+
+            print_gray "    Listing all executables in libdatadog/target/release/:"
+            ls -la libdatalog/target/release/ 2>&1 | grep -E "^-rwx" | head -20 || echo "    No executables found"
 
             # Check both possible locations
             if [ -f "libdatadog/target/release/dedup_headers" ]; then
