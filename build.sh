@@ -12,9 +12,9 @@
 set -e
 
 # Default parameters
-LIBDATADOG_VERSION="${1:-v25.0.0}"
-PLATFORM="${2:-x64-linux}"
-OUTPUT_DIR="${3:-output}"
+LIBDATADOG_VERSION="v25.0.0"
+PLATFORM="x64-linux"
+OUTPUT_DIR="output"
 FEATURES="minimal"
 CLEAN=false
 
