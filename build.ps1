@@ -26,15 +26,22 @@ Write-Host "  Platform: $Platform" -ForegroundColor Gray
 Write-Host "  Feature preset: $Features" -ForegroundColor Gray
 Write-Host "  Output directory: $OutputDir" -ForegroundColor Gray
 
-# Define feature sets
-$featureSets = @{
-    "minimal" = "ddcommon-ffi,cbindgen"  # Core profiling only (~4MB) - fastest build
-    "standard" = "ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,ddtelemetry-ffi,cbindgen"  # Most common features (~5-6MB)
-    "full" = "ddcommon-ffi,crashtracker-ffi,crashtracker-collector,crashtracker-receiver,demangler,ddtelemetry-ffi,data-pipeline-ffi,symbolizer,ddsketch-ffi,datadog-log-ffi,datadog-library-config-ffi,datadog-ffe-ffi,cbindgen"  # All features (~6.5MB) - matches original libdatadog
+# Map feature presets to builder features
+# The builder crate has its own feature flags that control which FFI modules are included
+$builderFeatures = @{
+    "minimal" = "profiling"  # Core profiling only (~4MB) - fastest build
+    "standard" = "profiling,crashtracker,telemetry"  # Most common features (~5-6MB)
+    "full" = ""  # All features (~6.5MB) - uses default features which include everything
 }
 
-$featureFlags = $featureSets[$Features]
-Write-Host "  Features: $featureFlags" -ForegroundColor Gray
+$featureArg = $builderFeatures[$Features]
+if ($featureArg -eq "") {
+    Write-Host "  Using default features (full)" -ForegroundColor Gray
+    $cargoFeatures = ""
+} else {
+    Write-Host "  Builder features: $featureArg" -ForegroundColor Gray
+    $cargoFeatures = "--no-default-features --features $featureArg"
+}
 
 # Check prerequisites
 try {
@@ -77,158 +84,53 @@ if (-not (Test-Path "libdatadog")) {
     Pop-Location
 }
 
-# Build libdatadog profiling FFI
-Write-Host "Building libdatadog profiling FFI..." -ForegroundColor Yellow
+# Build using libdatadog builder crate
+Write-Host "Building libdatadog using builder crate..." -ForegroundColor Yellow
 
-# Check if CARGO_BUILD_TARGET is set for cross-compilation
-$cargoTargetArg = ""
-$targetSubdir = ""
-if ($env:CARGO_BUILD_TARGET) {
-    $cargoTargetArg = "--target $env:CARGO_BUILD_TARGET"
-    $targetSubdir = "$env:CARGO_BUILD_TARGET/"
-    Write-Host "  Target architecture: $env:CARGO_BUILD_TARGET" -ForegroundColor Cyan
-}
+# Create temporary build output directory
+$TempBuildDir = Join-Path $OutputDir "temp-build"
+New-Item -ItemType Directory -Force -Path $TempBuildDir | Out-Null
 
 Push-Location libdatadog
 
-# Build release version
-# Note: The Cargo.toml already has optimized release profile:
-#   - opt-level = "s" (optimize for size)
-#   - lto = true (link-time optimization)
-#   - codegen-units = 1 (better optimization)
-#   - debug = "line-tables-only" (minimal debug info)
-Write-Host "  Building release configuration..." -ForegroundColor Gray
-$releaseCmd = "cargo build --release -p libdd-profiling-ffi --features `"$featureFlags`" $cargoTargetArg"
-Write-Host "  Running: $releaseCmd" -ForegroundColor DarkGray
-Invoke-Expression $releaseCmd
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Error: Release build failed" -ForegroundColor Red
-    Pop-Location
-    exit 1
+# Prepare builder command
+$builderCmd = "cargo run --release --bin release $cargoFeatures --"
+
+# Add output directory
+$builderCmd += " --out `"$TempBuildDir`""
+
+# Add target if cross-compiling
+if ($env:CARGO_BUILD_TARGET) {
+    Write-Host "  Target architecture: $env:CARGO_BUILD_TARGET" -ForegroundColor Cyan
+    $builderCmd += " --target $env:CARGO_BUILD_TARGET"
 }
 
-# Build debug version
-Write-Host "  Building debug configuration..." -ForegroundColor Gray
-$debugCmd = "cargo build -p libdd-profiling-ffi --features `"$featureFlags`" $cargoTargetArg"
-Write-Host "  Running: $debugCmd" -ForegroundColor DarkGray
-Invoke-Expression $debugCmd
+Write-Host "  Running builder..." -ForegroundColor Gray
+Write-Host "  Command: $builderCmd" -ForegroundColor DarkGray
+Invoke-Expression $builderCmd
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "Error: Debug build failed" -ForegroundColor Red
+    Write-Host "Error: Builder failed" -ForegroundColor Red
     Pop-Location
     exit 1
 }
 
 Pop-Location
 
-# Verify build outputs exist (with target subdirectory if cross-compiling)
-$ReleaseDir = "libdatadog/target/${targetSubdir}release"
-$DebugDir = "libdatadog/target/${targetSubdir}debug"
-
-if (-not (Test-Path "$ReleaseDir/datadog_profiling_ffi.dll")) {
-    Write-Host "Error: Release build did not produce expected DLL" -ForegroundColor Red
-    Write-Host "  Expected: $ReleaseDir/datadog_profiling_ffi.dll" -ForegroundColor Red
-    exit 1
-}
+# The builder creates output directly in the temp-build directory
+Write-Host "  Builder output: $TempBuildDir" -ForegroundColor Gray
 
 # Package the binaries
 Write-Host "Packaging binaries..." -ForegroundColor Yellow
 
+# Copy builder output to final package directory
 $PackageDir = Join-Path $OutputDir "libdatadog-$Platform"
-New-Item -ItemType Directory -Force -Path $PackageDir | Out-Null
+Write-Host "  Copying builder output to package directory..." -ForegroundColor Gray
+Copy-Item -Path $TempBuildDir -Destination $PackageDir -Recurse -Force
 
-# Create directory structure
-$Dirs = @(
-    "include/datadog",
-    "release/dynamic",
-    "release/static",
-    "debug/dynamic",
-    "debug/static"
-)
-foreach ($Dir in $Dirs) {
-    New-Item -ItemType Directory -Force -Path (Join-Path $PackageDir $Dir) | Out-Null
-}
-
-# Copy release artifacts
-Write-Host "  Copying release artifacts..." -ForegroundColor Gray
-
-# Dynamic build (DLL + import library)
-Copy-Item "$ReleaseDir/datadog_profiling_ffi.dll" -Destination "$PackageDir/release/dynamic/" -ErrorAction Stop
-Copy-Item "$ReleaseDir/datadog_profiling_ffi.pdb" -Destination "$PackageDir/release/dynamic/" -ErrorAction SilentlyContinue
-
-# Copy import library (.dll.lib) and rename to .lib for dynamic linking
-if (Test-Path "$ReleaseDir/datadog_profiling_ffi.dll.lib") {
-    Copy-Item "$ReleaseDir/datadog_profiling_ffi.dll.lib" -Destination "$PackageDir/release/dynamic/datadog_profiling_ffi.lib" -ErrorAction Stop
-} else {
-    Write-Host "  Warning: Release import library (.dll.lib) not found" -ForegroundColor Yellow
-}
-
-# Static build (static library only)
-if (Test-Path "$ReleaseDir/datadog_profiling_ffi.lib") {
-    Copy-Item "$ReleaseDir/datadog_profiling_ffi.lib" -Destination "$PackageDir/release/static/" -ErrorAction Stop
-} else {
-    Write-Host "  Warning: Release static library (.lib) not found" -ForegroundColor Yellow
-}
-
-# Copy debug artifacts
-Write-Host "  Copying debug artifacts..." -ForegroundColor Gray
-
-# Dynamic build (DLL + import library)
-Copy-Item "$DebugDir/datadog_profiling_ffi.dll" -Destination "$PackageDir/debug/dynamic/" -ErrorAction Stop
-Copy-Item "$DebugDir/datadog_profiling_ffi.pdb" -Destination "$PackageDir/debug/dynamic/" -ErrorAction SilentlyContinue
-
-# Copy import library (.dll.lib) and rename to .lib for dynamic linking
-if (Test-Path "$DebugDir/datadog_profiling_ffi.dll.lib") {
-    Copy-Item "$DebugDir/datadog_profiling_ffi.dll.lib" -Destination "$PackageDir/debug/dynamic/datadog_profiling_ffi.lib" -ErrorAction Stop
-} else {
-    Write-Host "  Warning: Debug import library (.dll.lib) not found" -ForegroundColor Yellow
-}
-
-# Static build (static library only)
-if (Test-Path "$DebugDir/datadog_profiling_ffi.lib") {
-    Copy-Item "$DebugDir/datadog_profiling_ffi.lib" -Destination "$PackageDir/debug/static/" -ErrorAction Stop
-} else {
-    Write-Host "  Warning: Debug static library (.lib) not found" -ForegroundColor Yellow
-}
-
-# Copy all headers from libdatadog
-Write-Host "  Copying headers..." -ForegroundColor Gray
-
-# Headers are generated during build with cbindgen feature to the top level of target directory:
-# target/include/datadog/ (NOT in the profile or architecture subdirectory)
-
-$headerPath = "libdatadog/target/include/datadog"
-Write-Host "  Checking for headers in: $headerPath" -ForegroundColor DarkGray
-
-if (Test-Path $headerPath) {
-    Write-Host "  Found headers in $headerPath" -ForegroundColor Gray
-    Get-ChildItem $headerPath -File | ForEach-Object { Write-Host "    - $($_.Name)" -ForegroundColor DarkGray }
-    Copy-Item "$headerPath/*" -Destination "$PackageDir/include/datadog/" -Recurse -Force -ErrorAction SilentlyContinue
-} else {
-    Write-Host "  Error: Headers NOT found in $headerPath" -ForegroundColor Red
-    Write-Host "  This usually means the cbindgen feature wasn't enabled during build." -ForegroundColor Red
-}
-
-# Verify profiling.h exists (critical)
-if (-not (Test-Path "$PackageDir/include/datadog/profiling.h")) {
-    Write-Host "  Error: profiling.h not found after build." -ForegroundColor Red
-    Write-Host "  Expected location: $headerPath/profiling.h" -ForegroundColor Red
-}
-
-# Copy license files
-Write-Host "  Copying license files..." -ForegroundColor Gray
-# Copy LICENSE from libdatadog (Apache 2.0)
-Copy-Item "libdatadog/LICENSE" -Destination "$PackageDir/" -ErrorAction SilentlyContinue
-# Copy NOTICE from libdatadog
-if (Test-Path "libdatadog/NOTICE") {
-    Copy-Item "libdatadog/NOTICE" -Destination "$PackageDir/" -ErrorAction SilentlyContinue
-}
-# Copy LICENSE-3rdparty.csv from libdatadog-dotnet root (summary of components)
+# Add our LICENSE-3rdparty.csv (summary) alongside the full yml from libdatadog
+Write-Host "  Adding LICENSE-3rdparty.csv..." -ForegroundColor Gray
 if (Test-Path "LICENSE-3rdparty.csv") {
-    Copy-Item "LICENSE-3rdparty.csv" -Destination "$PackageDir/" -ErrorAction SilentlyContinue
-}
-# Copy LICENSE-3rdparty.yml from libdatadog (full license texts)
-if (Test-Path "libdatadog/LICENSE-3rdparty.yml") {
-    Copy-Item "libdatadog/LICENSE-3rdparty.yml" -Destination "$PackageDir/" -ErrorAction SilentlyContinue
+    Copy-Item "LICENSE-3rdparty.csv" -Destination "$PackageDir/" -Force -ErrorAction SilentlyContinue
 }
 
 Write-Host "Build complete!" -ForegroundColor Green
