@@ -122,10 +122,10 @@ jobs:
           FEATURE_PRESET: ${{ inputs.feature_preset }}
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
-            pwsh -Command "./build.ps1 -LibdatadogVersion '${{ inputs.libdatadog_version }}' -Platform '${{ matrix.platform }}' -Features '${FEATURE_PRESET}' -Clean -OutputDir 'output/libdatadog-${{ matrix.platform }}'"
+            pwsh -Command "./build.ps1 -LibdatadogVersion '${{ inputs.libdatadog_version }}' -Platform '${{ matrix.platform }}' -Features '${FEATURE_PRESET}' -Clean"
           else
             chmod +x build.sh
-            ./build.sh --version "${{ inputs.libdatadog_version }}" --platform "${{ matrix.platform }}" --features "${FEATURE_PRESET}" --clean --output "output/libdatadog-${{ matrix.platform }}"
+            ./build.sh --version "${{ inputs.libdatadog_version }}" --platform "${{ matrix.platform }}" --features "${FEATURE_PRESET}" --clean
           fi
         shell: bash
 
