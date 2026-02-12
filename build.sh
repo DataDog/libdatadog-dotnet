@@ -160,14 +160,23 @@ if [ ! -d "libdatadog" ]; then
         exit 1
     fi
 else
-    print_gray "Using existing libdatadog clone"
+    print_gray "Checking existing libdatadog clone..."
     cd libdatadog
     CURRENT_TAG=$(git describe --tags --exact-match 2>/dev/null || echo "unknown")
-    if [ "$CURRENT_TAG" != "$LIBDATADOG_VERSION" ]; then
-        print_yellow "  Warning: Existing clone is at $CURRENT_TAG, not $LIBDATADOG_VERSION"
-        print_yellow "  Use --clean to clone the correct version"
-    fi
     cd ..
+
+    if [ "$CURRENT_TAG" != "$LIBDATADOG_VERSION" ]; then
+        print_yellow "  Existing clone is at $CURRENT_TAG, but need $LIBDATADOG_VERSION"
+        print_yellow "  Removing old clone and cloning correct version..."
+        rm -rf libdatadog
+        git clone --depth 1 --branch "$LIBDATADOG_VERSION" https://github.com/DataDog/libdatadog.git
+        if [ $? -ne 0 ]; then
+            print_red "Error: Failed to clone libdatadog. Is $LIBDATADOG_VERSION a valid tag?"
+            exit 1
+        fi
+    else
+        print_gray "  Using existing clone at correct version $LIBDATADOG_VERSION"
+    fi
 fi
 
 # Build libdatadog profiling FFI

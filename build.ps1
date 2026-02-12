@@ -67,14 +67,23 @@ if (-not (Test-Path "libdatadog")) {
         exit 1
     }
 } else {
-    Write-Host "Using existing libdatadog clone" -ForegroundColor Gray
+    Write-Host "Checking existing libdatadog clone..." -ForegroundColor Gray
     Push-Location libdatadog
     $currentTag = git describe --tags --exact-match 2>$null
-    if ($currentTag -ne $LibdatadogVersion) {
-        Write-Host "  Warning: Existing clone is at $currentTag, not $LibdatadogVersion" -ForegroundColor Yellow
-        Write-Host "  Use -Clean to clone the correct version" -ForegroundColor Yellow
-    }
     Pop-Location
+
+    if ($currentTag -ne $LibdatadogVersion) {
+        Write-Host "  Existing clone is at $currentTag, but need $LibdatadogVersion" -ForegroundColor Yellow
+        Write-Host "  Removing old clone and cloning correct version..." -ForegroundColor Yellow
+        Remove-Item -Path "libdatadog" -Recurse -Force -ErrorAction Stop
+        git clone --depth 1 --branch $LibdatadogVersion https://github.com/DataDog/libdatadog.git
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Error: Failed to clone libdatadog. Is $LibdatadogVersion a valid tag?" -ForegroundColor Red
+            exit 1
+        }
+    } else {
+        Write-Host "  Using existing clone at correct version $LibdatadogVersion" -ForegroundColor Gray
+    }
 }
 
 # Build libdatadog profiling FFI
