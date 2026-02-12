@@ -556,15 +556,22 @@ if [ ${#GENERATED_HEADERS[@]} -gt 0 ]; then
     if [ -z "$DEDUP_TOOL" ]; then
         print_gray "    Building dedup_headers tool..."
         cd libdatadog/tools
-        $CARGO_CMD build --release --bin dedup_headers
-        if [ $? -eq 0 ]; then
+        # Build for the host architecture, not the target (unset CARGO_BUILD_TARGET)
+        # We need to run this tool on the build machine, not on the target
+        SAVED_CARGO_BUILD_TARGET="$CARGO_BUILD_TARGET"
+        unset CARGO_BUILD_TARGET
+        cargo build --release --bin dedup_headers
+        BUILD_RESULT=$?
+        export CARGO_BUILD_TARGET="$SAVED_CARGO_BUILD_TARGET"
+
+        if [ $BUILD_RESULT -eq 0 ]; then
             cd ../..
-            # After building, check in the target-specific directory
-            if [ -f "$TARGET_DIR/release/dedup_headers" ]; then
-                DEDUP_TOOL="$TARGET_DIR/release/dedup_headers"
+            # Tool is built for host, so it's in libdatadog/target/release/
+            if [ -f "libdatadog/target/release/dedup_headers" ]; then
+                DEDUP_TOOL="libdatadog/target/release/dedup_headers"
                 print_gray "    Found at: $DEDUP_TOOL"
             else
-                print_yellow "    Warning: dedup_headers binary not found at expected location: $TARGET_DIR/release/dedup_headers"
+                print_yellow "    Warning: dedup_headers binary not found at libdatadog/target/release/dedup_headers"
             fi
         else
             print_yellow "    Warning: Failed to build dedup_headers tool. Headers may contain duplicate definitions."

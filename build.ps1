@@ -290,15 +290,22 @@ if ($generatedHeaders.Count -gt 0) {
     if (-not $toolPath) {
         Write-Host "    Building dedup_headers tool..." -ForegroundColor Gray
         Push-Location libdatadog\tools
+        # Build for the host architecture, not the target (unset CARGO_BUILD_TARGET)
+        # We need to run this tool on the build machine, not on the target
+        $savedTarget = $env:CARGO_BUILD_TARGET
+        $env:CARGO_BUILD_TARGET = $null
         cargo build --release --bin dedup_headers
-        if ($LASTEXITCODE -eq 0) {
+        $buildResult = $LASTEXITCODE
+        $env:CARGO_BUILD_TARGET = $savedTarget
+
+        if ($buildResult -eq 0) {
             Pop-Location
-            # After building, check in the target-specific directory
-            if (Test-Path "$targetDir\release\dedup_headers.exe") {
-                $toolPath = "$targetDir\release\dedup_headers.exe"
+            # Tool is built for host, so it's in libdatadog\target\release\
+            if (Test-Path "libdatadog\target\release\dedup_headers.exe") {
+                $toolPath = "libdatadog\target\release\dedup_headers.exe"
                 Write-Host "    Found at: $toolPath" -ForegroundColor Gray
             } else {
-                Write-Host "    Warning: dedup_headers binary not found at expected location: $targetDir\release\dedup_headers.exe" -ForegroundColor Yellow
+                Write-Host "    Warning: dedup_headers binary not found at libdatadog\target\release\dedup_headers.exe" -ForegroundColor Yellow
             }
         } else {
             Pop-Location
