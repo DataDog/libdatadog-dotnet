@@ -462,73 +462,55 @@ if [ -f "$PACKAGE_DIR/lib/$DYNAMIC_LIB_NAME" ]; then
     esac
 fi
 
-# Generate headers using cbindgen
-print_gray "  Generating headers with cbindgen..."
+# Copy headers generated during cargo build
+print_gray "  Copying headers from build output..."
 
-# Check if cbindgen is installed
-if ! command -v cbindgen &> /dev/null; then
-    print_red "Error: cbindgen not found. Please install it with: cargo install cbindgen"
+# Headers are generated during cargo build (with cbindgen feature) to target/include/datadog/
+SOURCE_HEADER_DIR="libdatadog/target/include/datadog"
+
+# Verify source headers exist
+if [ ! -d "$SOURCE_HEADER_DIR" ]; then
+    print_red "Error: Header directory not found at $SOURCE_HEADER_DIR"
+    print_red "Headers should be generated during cargo build with cbindgen feature"
     exit 1
 fi
 
-# Generate common.h from libdd-common-ffi
-print_gray "    Generating common.h..."
-cd libdatadog/libdd-common-ffi
-cbindgen --output "$PACKAGE_DIR/include/datadog/common.h"
-if [ $? -ne 0 ]; then
-    print_red "Error: Failed to generate common.h"
-    cd ../..
+# Copy common.h
+print_gray "    Copying common.h..."
+if [ -f "$SOURCE_HEADER_DIR/common.h" ]; then
+    cp "$SOURCE_HEADER_DIR/common.h" "$PACKAGE_DIR/include/datadog/"
+else
+    print_red "Error: common.h not found in build output"
     exit 1
 fi
-cd ../..
 
-# Determine which headers to generate based on feature preset
-HEADERS_TO_GENERATE=("profiling")
+# Determine which headers to copy based on feature preset
+HEADERS_TO_COPY=("profiling")
 
 case "$FEATURES" in
     standard)
-        HEADERS_TO_GENERATE+=("crashtracker" "telemetry")
+        HEADERS_TO_COPY+=("crashtracker" "telemetry")
         ;;
     full)
-        HEADERS_TO_GENERATE+=("crashtracker" "telemetry" "data-pipeline" "library-config" "log" "ddsketch" "ffe")
+        HEADERS_TO_COPY+=("crashtracker" "telemetry" "data-pipeline" "library-config" "log" "ddsketch" "ffe" "blazesym")
         ;;
 esac
 
-# Generate each header
-GENERATED_HEADERS=()
-for HEADER_NAME in "${HEADERS_TO_GENERATE[@]}"; do
-    # Map header name to FFI crate directory
-    case "$HEADER_NAME" in
-        profiling) FFI_CRATE="libdd-profiling-ffi" ;;
-        crashtracker) FFI_CRATE="libdd-crashtracker-ffi" ;;
-        telemetry) FFI_CRATE="libdd-telemetry-ffi" ;;
-        data-pipeline) FFI_CRATE="libdd-data-pipeline-ffi" ;;
-        library-config) FFI_CRATE="libdd-library-config-ffi" ;;
-        log) FFI_CRATE="libdd-log-ffi" ;;
-        ddsketch) FFI_CRATE="libdd-ddsketch-ffi" ;;
-        ffe) FFI_CRATE="datadog-ffe-ffi" ;;
-        *) continue ;;
-    esac
-
-    # Check if cbindgen.toml exists for this crate
-    if [ ! -f "libdatadog/$FFI_CRATE/cbindgen.toml" ]; then
-        print_yellow "    Warning: cbindgen.toml not found for $FFI_CRATE, skipping..."
-        continue
-    fi
-
-    print_gray "    Generating $HEADER_NAME.h..."
-    cd "libdatadog/$FFI_CRATE"
-    cbindgen --output "$PACKAGE_DIR/include/datadog/$HEADER_NAME.h"
-    if [ $? -eq 0 ]; then
-        GENERATED_HEADERS+=("$PACKAGE_DIR/include/datadog/$HEADER_NAME.h")
+# Copy each header that exists
+COPIED_HEADERS=()
+for HEADER_NAME in "${HEADERS_TO_COPY[@]}"; do
+    SOURCE_HEADER="$SOURCE_HEADER_DIR/$HEADER_NAME.h"
+    if [ -f "$SOURCE_HEADER" ]; then
+        print_gray "    Copying $HEADER_NAME.h..."
+        cp "$SOURCE_HEADER" "$PACKAGE_DIR/include/datadog/"
+        COPIED_HEADERS+=("$PACKAGE_DIR/include/datadog/$HEADER_NAME.h")
     else
-        print_yellow "    Warning: Failed to generate $HEADER_NAME.h"
+        print_yellow "    Warning: $HEADER_NAME.h not found in build output, skipping..."
     fi
-    cd ../..
 done
 
-# Deduplicate headers - remove definitions from child headers that exist in common.h
-if [ ${#GENERATED_HEADERS[@]} -gt 0 ]; then
+# Deduplicate headers - move type definitions from child headers to common.h
+if [ ${#COPIED_HEADERS[@]} -gt 0 ]; then
     print_gray "  Deduplicating headers..."
 
     # Build the dedup_headers tool from libdatadog/tools if needed
@@ -579,9 +561,21 @@ if [ ${#GENERATED_HEADERS[@]} -gt 0 ]; then
         fi
     fi
 
+    # Filter out blazesym.h from deduplication (it's a third-party header)
+    HEADERS_TO_DEDUP=()
+    for HEADER in "${COPIED_HEADERS[@]}"; do
+        if [[ "$HEADER" != *"blazesym.h" ]]; then
+            HEADERS_TO_DEDUP+=("$HEADER")
+        fi
+    done
+
     # Use the dedup_headers tool
-    if [ -n "$DEDUP_TOOL" ]; then
-        ./$DEDUP_TOOL "$PACKAGE_DIR/include/datadog/common.h" "${GENERATED_HEADERS[@]}"
+    if [ -n "$DEDUP_TOOL" ] && [ ${#HEADERS_TO_DEDUP[@]} -gt 0 ]; then
+        print_gray "    Running dedup_headers on ${#HEADERS_TO_DEDUP[@]} header(s)..."
+        ./$DEDUP_TOOL "$PACKAGE_DIR/include/datadog/common.h" "${HEADERS_TO_DEDUP[@]}"
+        if [ $? -ne 0 ]; then
+            print_yellow "    Warning: dedup_headers failed. Headers may contain duplicate definitions."
+        fi
     else
         print_yellow "  Warning: dedup_headers tool not found. Headers may contain duplicate definitions."
     fi

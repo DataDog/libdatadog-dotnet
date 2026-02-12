@@ -92,9 +92,6 @@ jobs:
           rustup component add rustfmt clippy
           rustup target add ${{ matrix.target }}
 
-      - name: Install cbindgen
-        run: cargo install cbindgen
-
       - name: Install cross-compilation tools (Linux only)
         if: matrix.os == 'ubuntu-latest' && matrix.target != 'x86_64-unknown-linux-gnu'
         run: |
