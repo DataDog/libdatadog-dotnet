@@ -92,6 +92,9 @@ jobs:
           rustup component add rustfmt clippy
           rustup target add ${{ matrix.target }}
 
+      - name: Install cbindgen
+        run: cargo install cbindgen
+
       - name: Install cross-compilation tools (Linux only)
         if: matrix.os == 'ubuntu-latest' && matrix.target != 'x86_64-unknown-linux-gnu'
         run: |
@@ -122,53 +125,45 @@ jobs:
           FEATURE_PRESET: ${{ inputs.feature_preset }}
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
-            pwsh -Command "./build.ps1 -LibdatadogVersion '${{ inputs.libdatadog_version }}' -Platform '${{ matrix.platform }}' -Features '${FEATURE_PRESET}' -Clean -OutputDir 'output/libdatadog-${{ matrix.platform }}'"
+            pwsh -Command "./build.ps1 -LibdatadogVersion '${{ inputs.libdatadog_version }}' -Platform '${{ matrix.platform }}' -Features '${FEATURE_PRESET}' -Clean"
           else
             chmod +x build.sh
-            ./build.sh --version "${{ inputs.libdatadog_version }}" --platform "${{ matrix.platform }}" --features "${FEATURE_PRESET}" --clean --output "output/libdatadog-${{ matrix.platform }}"
+            ./build.sh --version "${{ inputs.libdatadog_version }}" --platform "${{ matrix.platform }}" --features "${FEATURE_PRESET}" --clean
           fi
         shell: bash
 
       - name: Verify build artifacts
         if: inputs.verify_artifacts
         run: |
+          output_dir="output/libdatadog-${{ matrix.platform }}"
+
           if [ "$RUNNER_OS" == "Windows" ]; then
-            output_dir="output/libdatadog-${{ matrix.platform }}/libdatadog-${{ matrix.platform }}"
-            # Check for DLL
+            # Check for Windows DLL (in release/dynamic for Windows builds)
             if [ ! -f "$output_dir/release/dynamic/datadog_profiling_ffi.dll" ]; then
-              echo "Error: Release DLL not found"
+              echo "Error: Release DLL not found at $output_dir/release/dynamic/datadog_profiling_ffi.dll"
               exit 1
             fi
-            # Check for headers
-            if [ ! -d "$output_dir/include/datadog" ] || [ -z "$(ls -A $output_dir/include/datadog)" ]; then
-              echo "Error: Headers not found or empty"
-              exit 1
-            fi
-            # Check for license files
-            if [ ! -f "$output_dir/LICENSE" ]; then
-              echo "Error: LICENSE not found"
-              exit 1
-            fi
-            echo "Build artifacts verified successfully!"
           else
-            output_dir="output/libdatadog-${{ matrix.platform }}/libdatadog-${{ matrix.platform }}"
-            # Check for shared library
+            # Check for shared library (in lib for Linux/macOS builds)
             if [ ! -f "$output_dir/lib/libdatadog_profiling.so" ] && [ ! -f "$output_dir/lib/libdatadog_profiling.dylib" ]; then
               echo "Error: Shared library not found"
               exit 1
             fi
-            # Check for headers
-            if [ ! -d "$output_dir/include/datadog" ] || [ -z "$(ls -A $output_dir/include/datadog)" ]; then
-              echo "Error: Headers not found or empty"
-              exit 1
-            fi
-            # Check for license files
-            if [ ! -f "$output_dir/LICENSE" ]; then
-              echo "Error: LICENSE not found"
-              exit 1
-            fi
-            echo "Build artifacts verified successfully!"
           fi
+
+          # Check for headers
+          if [ ! -d "$output_dir/include/datadog" ] || [ -z "$(ls -A $output_dir/include/datadog)" ]; then
+            echo "Error: Headers not found or empty"
+            exit 1
+          fi
+
+          # Check for license files
+          if [ ! -f "$output_dir/LICENSE" ]; then
+            echo "Error: LICENSE not found"
+            exit 1
+          fi
+
+          echo "Build artifacts verified successfully!"
         shell: bash
 
       - name: Upload build artifacts

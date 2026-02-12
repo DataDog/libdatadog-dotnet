@@ -135,6 +135,7 @@ Write-Host "Packaging binaries..." -ForegroundColor Yellow
 
 $PackageDir = Join-Path $OutputDir "libdatadog-$Platform"
 New-Item -ItemType Directory -Force -Path $PackageDir | Out-Null
+$PackageDir = (Resolve-Path $PackageDir).Path
 
 # Create directory structure
 $Dirs = @(
@@ -190,29 +191,149 @@ if (Test-Path "$DebugDir/datadog_profiling_ffi.lib") {
     Write-Host "  Warning: Debug static library (.lib) not found" -ForegroundColor Yellow
 }
 
-# Copy all headers from libdatadog
-Write-Host "  Copying headers..." -ForegroundColor Gray
+# Generate headers using cbindgen
+Write-Host "  Generating headers with cbindgen..." -ForegroundColor Gray
 
-# Headers are generated during build with cbindgen feature to the top level of target directory:
-# target/include/datadog/ (NOT in the profile or architecture subdirectory)
-
-$headerPath = "libdatadog/target/include/datadog"
-Write-Host "  Checking for headers in: $headerPath" -ForegroundColor DarkGray
-
-if (Test-Path $headerPath) {
-    Write-Host "  Found headers in $headerPath" -ForegroundColor Gray
-    Get-ChildItem $headerPath -File | ForEach-Object { Write-Host "    - $($_.Name)" -ForegroundColor DarkGray }
-    Copy-Item "$headerPath/*" -Destination "$PackageDir/include/datadog/" -Recurse -Force -ErrorAction SilentlyContinue
-} else {
-    Write-Host "  Error: Headers NOT found in $headerPath" -ForegroundColor Red
-    Write-Host "  This usually means the cbindgen feature wasn't enabled during build." -ForegroundColor Red
+# Check if cbindgen is installed
+$cbindgenPath = Get-Command cbindgen -ErrorAction SilentlyContinue
+if (-not $cbindgenPath) {
+    Write-Host "  Error: cbindgen not found. Please install it with: cargo install cbindgen" -ForegroundColor Red
+    exit 1
 }
 
-# Verify profiling.h exists (critical)
-if (-not (Test-Path "$PackageDir/include/datadog/profiling.h")) {
-    Write-Host "  Error: profiling.h not found after build." -ForegroundColor Red
-    Write-Host "  Expected location: $headerPath/profiling.h" -ForegroundColor Red
+# Generate common.h from libdd-common-ffi
+Write-Host "    Generating common.h..." -ForegroundColor Gray
+Push-Location libdatadog\libdd-common-ffi
+& cbindgen --output "$PackageDir\include\datadog\common.h"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  Error: Failed to generate common.h" -ForegroundColor Red
+    Pop-Location
+    exit 1
 }
+Pop-Location
+
+# Determine which headers to generate based on feature preset
+$headersToGenerate = @("profiling")
+
+switch ($Features) {
+    "standard" {
+        $headersToGenerate += @("crashtracker", "telemetry")
+    }
+    "full" {
+        $headersToGenerate += @("crashtracker", "telemetry", "data-pipeline", "library-config", "log", "ddsketch", "ffe")
+    }
+}
+
+# Generate each header
+$generatedHeaders = @()
+foreach ($headerName in $headersToGenerate) {
+    # Map header name to FFI crate directory
+    $ffiCrate = switch ($headerName) {
+        "profiling" { "libdd-profiling-ffi" }
+        "crashtracker" { "libdd-crashtracker-ffi" }
+        "telemetry" { "libdd-telemetry-ffi" }
+        "data-pipeline" { "libdd-data-pipeline-ffi" }
+        "library-config" { "libdd-library-config-ffi" }
+        "log" { "libdd-log-ffi" }
+        "ddsketch" { "libdd-ddsketch-ffi" }
+        "ffe" { "datadog-ffe-ffi" }
+        default { $null }
+    }
+
+    if (-not $ffiCrate) {
+        continue
+    }
+
+    # Check if cbindgen.toml exists for this crate
+    if (-not (Test-Path "libdatadog\$ffiCrate\cbindgen.toml")) {
+        Write-Host "    Warning: cbindgen.toml not found for $ffiCrate, skipping..." -ForegroundColor Yellow
+        continue
+    }
+
+    Write-Host "    Generating $headerName.h..." -ForegroundColor Gray
+    Push-Location "libdatadog\$ffiCrate"
+    & cbindgen --output "$PackageDir\include\datadog\$headerName.h"
+    if ($LASTEXITCODE -eq 0) {
+        $generatedHeaders += "$PackageDir\include\datadog\$headerName.h"
+    } else {
+        Write-Host "    Warning: Failed to generate $headerName.h" -ForegroundColor Yellow
+    }
+    Pop-Location
+}
+
+# Deduplicate headers - remove definitions from child headers that exist in common.h
+if ($generatedHeaders.Count -gt 0) {
+    Write-Host "  Deduplicating headers..." -ForegroundColor Gray
+
+    # Build the dedup_headers tool from libdatadog/tools if needed
+    # When CARGO_BUILD_TARGET is set, binaries go to target/$env:CARGO_BUILD_TARGET/release/
+    $toolPath = $null
+
+    # Determine the target directory based on CARGO_BUILD_TARGET
+    if ($env:CARGO_BUILD_TARGET) {
+        $targetDir = "libdatadog\target\$env:CARGO_BUILD_TARGET"
+    } else {
+        $targetDir = "libdatadog\target"
+    }
+
+    # Check for the tool in the target-specific directory first, then fallback to default
+    if (Test-Path "$targetDir\release\dedup_headers.exe") {
+        $toolPath = "$targetDir\release\dedup_headers.exe"
+    } elseif (Test-Path "$targetDir\debug\dedup_headers.exe") {
+        $toolPath = "$targetDir\debug\dedup_headers.exe"
+    } elseif (Test-Path "libdatadog\target\release\dedup_headers.exe") {
+        $toolPath = "libdatadog\target\release\dedup_headers.exe"
+    } elseif (Test-Path "libdatadog\target\debug\dedup_headers.exe") {
+        $toolPath = "libdatadog\target\debug\dedup_headers.exe"
+    }
+
+    if (-not $toolPath) {
+        Write-Host "    Building dedup_headers tool..." -ForegroundColor Gray
+        Push-Location libdatadog\tools
+        # Build for the host architecture, not the target (unset CARGO_BUILD_TARGET)
+        # We need to run this tool on the build machine, not on the target
+        $savedTarget = $env:CARGO_BUILD_TARGET
+        $env:CARGO_BUILD_TARGET = $null
+        cargo build --release --bin dedup_headers
+        $buildResult = $LASTEXITCODE
+        $env:CARGO_BUILD_TARGET = $savedTarget
+
+        if ($buildResult -eq 0) {
+            Pop-Location
+            # Tool is built for host, so it's in libdatadog\target\release\
+            if (Test-Path "libdatadog\target\release\dedup_headers.exe") {
+                $toolPath = "libdatadog\target\release\dedup_headers.exe"
+                Write-Host "    Found at: $toolPath" -ForegroundColor Gray
+            } else {
+                Write-Host "    Warning: dedup_headers binary not found at libdatadog\target\release\dedup_headers.exe" -ForegroundColor Yellow
+            }
+        } else {
+            Pop-Location
+            Write-Host "    Warning: Failed to build dedup_headers tool. Headers may contain duplicate definitions." -ForegroundColor Yellow
+        }
+    }
+
+    # Use the dedup_headers tool
+    if ($toolPath) {
+        $headerArgs = @("$PackageDir\include\datadog\common.h") + $generatedHeaders
+        & ".\$toolPath" $headerArgs
+    } else {
+        Write-Host "  Warning: dedup_headers tool not found. Headers may contain duplicate definitions." -ForegroundColor Yellow
+    }
+}
+
+# Verify critical headers exist
+if (-not (Test-Path "$PackageDir\include\datadog\common.h")) {
+    Write-Host "  Error: common.h not generated" -ForegroundColor Red
+    exit 1
+}
+
+if (-not (Test-Path "$PackageDir\include\datadog\profiling.h")) {
+    Write-Host "  Error: profiling.h not generated" -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "  Headers generated successfully" -ForegroundColor Gray
 
 # Copy license files
 Write-Host "  Copying license files..." -ForegroundColor Gray

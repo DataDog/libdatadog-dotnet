@@ -12,9 +12,9 @@
 set -e
 
 # Default parameters
-LIBDATADOG_VERSION="${1:-v25.0.0}"
-PLATFORM="${2:-x64-linux}"
-OUTPUT_DIR="${3:-output}"
+LIBDATADOG_VERSION="v25.0.0"
+PLATFORM="x64-linux"
+OUTPUT_DIR="output"
 FEATURES="minimal"
 CLEAN=false
 
@@ -240,7 +240,7 @@ fi
 
 # Build debug version
 print_gray "  Building debug configuration with $CARGO_CMD..."
-$CARGO_CMD build -p libdd-profiling-ffi $CARGO_TARGET_ARG
+$CARGO_CMD build -p libdd-profiling-ffi --features "$FEATURE_FLAGS" $CARGO_TARGET_ARG
 if [ $? -ne 0 ]; then
     print_red "Error: Debug build failed"
     exit 1
@@ -462,31 +462,143 @@ if [ -f "$PACKAGE_DIR/lib/$DYNAMIC_LIB_NAME" ]; then
     esac
 fi
 
-# Copy all headers from libdatadog
-print_gray "  Copying headers..."
+# Generate headers using cbindgen
+print_gray "  Generating headers with cbindgen..."
 
-# Copy all datadog headers if they exist
-if [ -d "libdatadog/include/datadog" ]; then
-    cp -r libdatadog/include/datadog/* "$PACKAGE_DIR/include/datadog/" 2>/dev/null || true
+# Check if cbindgen is installed
+if ! command -v cbindgen &> /dev/null; then
+    print_red "Error: cbindgen not found. Please install it with: cargo install cbindgen"
+    exit 1
 fi
 
-# Also check target/include location
-if [ -d "libdatadog/target/include/datadog" ]; then
-    cp -r libdatadog/target/include/datadog/* "$PACKAGE_DIR/include/datadog/" 2>/dev/null || true
+# Generate common.h from libdd-common-ffi
+print_gray "    Generating common.h..."
+cd libdatadog/libdd-common-ffi
+cbindgen --output "$PACKAGE_DIR/include/datadog/common.h"
+if [ $? -ne 0 ]; then
+    print_red "Error: Failed to generate common.h"
+    cd ../..
+    exit 1
 fi
+cd ../..
 
-# Ensure profiling.h exists (critical)
-if [ ! -f "$PACKAGE_DIR/include/datadog/profiling.h" ]; then
-    print_yellow "  Warning: profiling.h not found. Attempting to generate..."
-    cd libdatadog/libdd-profiling-ffi
-    if command -v cbindgen &> /dev/null; then
-        cbindgen --output "$PACKAGE_DIR/include/datadog/profiling.h"
-        [ $? -eq 0 ] && print_gray "  Generated profiling.h with cbindgen"
+# Determine which headers to generate based on feature preset
+HEADERS_TO_GENERATE=("profiling")
+
+case "$FEATURES" in
+    standard)
+        HEADERS_TO_GENERATE+=("crashtracker" "telemetry")
+        ;;
+    full)
+        HEADERS_TO_GENERATE+=("crashtracker" "telemetry" "data-pipeline" "library-config" "log" "ddsketch" "ffe")
+        ;;
+esac
+
+# Generate each header
+GENERATED_HEADERS=()
+for HEADER_NAME in "${HEADERS_TO_GENERATE[@]}"; do
+    # Map header name to FFI crate directory
+    case "$HEADER_NAME" in
+        profiling) FFI_CRATE="libdd-profiling-ffi" ;;
+        crashtracker) FFI_CRATE="libdd-crashtracker-ffi" ;;
+        telemetry) FFI_CRATE="libdd-telemetry-ffi" ;;
+        data-pipeline) FFI_CRATE="libdd-data-pipeline-ffi" ;;
+        library-config) FFI_CRATE="libdd-library-config-ffi" ;;
+        log) FFI_CRATE="libdd-log-ffi" ;;
+        ddsketch) FFI_CRATE="libdd-ddsketch-ffi" ;;
+        ffe) FFI_CRATE="datadog-ffe-ffi" ;;
+        *) continue ;;
+    esac
+
+    # Check if cbindgen.toml exists for this crate
+    if [ ! -f "libdatadog/$FFI_CRATE/cbindgen.toml" ]; then
+        print_yellow "    Warning: cbindgen.toml not found for $FFI_CRATE, skipping..."
+        continue
+    fi
+
+    print_gray "    Generating $HEADER_NAME.h..."
+    cd "libdatadog/$FFI_CRATE"
+    cbindgen --output "$PACKAGE_DIR/include/datadog/$HEADER_NAME.h"
+    if [ $? -eq 0 ]; then
+        GENERATED_HEADERS+=("$PACKAGE_DIR/include/datadog/$HEADER_NAME.h")
     else
-        print_yellow "  Warning: cbindgen not found. Install with: cargo install cbindgen"
+        print_yellow "    Warning: Failed to generate $HEADER_NAME.h"
     fi
     cd ../..
+done
+
+# Deduplicate headers - remove definitions from child headers that exist in common.h
+if [ ${#GENERATED_HEADERS[@]} -gt 0 ]; then
+    print_gray "  Deduplicating headers..."
+
+    # Build the dedup_headers tool from libdatadog/tools if needed
+    # Check both workspace target and tools target locations
+    # When CARGO_BUILD_TARGET is set, binaries go to target/$CARGO_BUILD_TARGET/release/
+    DEDUP_TOOL=""
+
+    # Determine the target directory based on CARGO_BUILD_TARGET
+    if [ -n "$CARGO_BUILD_TARGET" ]; then
+        TARGET_DIR="libdatadog/target/$CARGO_BUILD_TARGET"
+    else
+        TARGET_DIR="libdatadog/target"
+    fi
+
+    if [ -f "$TARGET_DIR/release/dedup_headers" ]; then
+        DEDUP_TOOL="$TARGET_DIR/release/dedup_headers"
+    elif [ -f "$TARGET_DIR/debug/dedup_headers" ]; then
+        DEDUP_TOOL="$TARGET_DIR/debug/dedup_headers"
+    elif [ -f "libdatadog/target/release/dedup_headers" ]; then
+        DEDUP_TOOL="libdatadog/target/release/dedup_headers"
+    elif [ -f "libdatadog/target/debug/dedup_headers" ]; then
+        DEDUP_TOOL="libdatadog/target/debug/dedup_headers"
+    fi
+
+    if [ -z "$DEDUP_TOOL" ]; then
+        print_gray "    Building dedup_headers tool..."
+        cd libdatadog/tools
+        # Build for the host architecture, not the target (unset CARGO_BUILD_TARGET)
+        # We need to run this tool on the build machine, not on the target
+        SAVED_CARGO_BUILD_TARGET="$CARGO_BUILD_TARGET"
+        unset CARGO_BUILD_TARGET
+        cargo build --release --bin dedup_headers
+        BUILD_RESULT=$?
+        export CARGO_BUILD_TARGET="$SAVED_CARGO_BUILD_TARGET"
+
+        if [ $BUILD_RESULT -eq 0 ]; then
+            cd ../..
+            # Tool is built for host, so it's in libdatadog/target/release/
+            if [ -f "libdatadog/target/release/dedup_headers" ]; then
+                DEDUP_TOOL="libdatadog/target/release/dedup_headers"
+                print_gray "    Found at: $DEDUP_TOOL"
+            else
+                print_yellow "    Warning: dedup_headers binary not found at libdatadog/target/release/dedup_headers"
+            fi
+        else
+            print_yellow "    Warning: Failed to build dedup_headers tool. Headers may contain duplicate definitions."
+            cd ../..
+        fi
+    fi
+
+    # Use the dedup_headers tool
+    if [ -n "$DEDUP_TOOL" ]; then
+        ./$DEDUP_TOOL "$PACKAGE_DIR/include/datadog/common.h" "${GENERATED_HEADERS[@]}"
+    else
+        print_yellow "  Warning: dedup_headers tool not found. Headers may contain duplicate definitions."
+    fi
 fi
+
+# Verify critical headers exist
+if [ ! -f "$PACKAGE_DIR/include/datadog/common.h" ]; then
+    print_red "Error: common.h not generated"
+    exit 1
+fi
+
+if [ ! -f "$PACKAGE_DIR/include/datadog/profiling.h" ]; then
+    print_red "Error: profiling.h not generated"
+    exit 1
+fi
+
+print_gray "  Headers generated successfully"
 
 # Create pkg-config files
 print_gray "  Creating pkg-config files..."
