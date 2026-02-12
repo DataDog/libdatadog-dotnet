@@ -76,8 +76,12 @@ jobs:
             # Auto-increment based on latest tag
             INCREMENT_TYPE="${{ github.event.inputs.version_increment }}"
 
-            # Get latest tag
-            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            # Get latest tag from all tags (not just reachable from current commit)
+            # Sort by version number and get the highest
+            LATEST_TAG=$(git tag -l "v*" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
+            if [ -z "$LATEST_TAG" ]; then
+              LATEST_TAG="v0.0.0"
+            fi
             echo "Latest tag: $LATEST_TAG"
 
             # Parse version (remove 'v' prefix)
