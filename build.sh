@@ -223,6 +223,16 @@ fi
 
 cd libdatadog
 
+# Copy Cross.toml and Docker files for cross tool
+# Cross reads Cross.toml from the current directory where it's invoked
+if [ "$USE_CROSS" = true ]; then
+    print_gray "  Copying Cross.toml and Docker build files..."
+    cp -f ../Cross.toml .
+    rm -rf tools/docker
+    mkdir -p tools/docker
+    cp -f ../tools/docker/Dockerfile.centos* tools/docker/ 2>/dev/null || true
+fi
+
 # Select cargo or cross
 CARGO_CMD="cargo"
 if [ "$USE_CROSS" = true ]; then
