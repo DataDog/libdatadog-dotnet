@@ -1,0 +1,20 @@
+# Dockerfile for building libdatadog with GLIBC 2.17 compatibility
+# Based on CentOS 7 which provides GLIBC 2.17
+# This matches the approach used by the official libdatadog releases
+
+FROM ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main-centos
+
+# CentOS 7 is EOL - update repository URLs to use vault.centos.org
+RUN sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo \
+    && sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/*.repo \
+    && sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
+
+# Install additional dependencies
+RUN yum update -y \
+    && yum install -y unzip \
+    && yum clean all
+
+# The cross-rs base image already includes:
+# - Rust toolchain
+# - gcc/g++ targeting x86_64-unknown-linux-gnu
+# - CMake and other build tools
