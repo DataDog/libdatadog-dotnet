@@ -107,10 +107,10 @@ print_gray "  Output directory: $OUTPUT_DIR"
 # Define feature sets
 case "$FEATURES" in
     minimal)
-        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,cbindgen"  # Core profiling + crashtracker (~4-5MB)
+        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,symbolizer,cbindgen"  # Core profiling + crashtracker + symbolizer (~5-6MB)
         ;;
     standard)
-        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,ddtelemetry-ffi,cbindgen"  # Most common features (~5-6MB)
+        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,ddtelemetry-ffi,symbolizer,cbindgen"  # Most common features (~5-6MB)
         ;;
     full)
         FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,crashtracker-receiver,demangler,ddtelemetry-ffi,data-pipeline-ffi,symbolizer,ddsketch-ffi,datadog-log-ffi,datadog-library-config-ffi,datadog-ffe-ffi,cbindgen"  # All features (~6.5MB) - matches original libdatadog
@@ -498,10 +498,10 @@ HEADERS_TO_COPY=("profiling")
 
 case "$FEATURES" in
     minimal)
-        HEADERS_TO_COPY+=("crashtracker")
+        HEADERS_TO_COPY+=("crashtracker" "blazesym")
         ;;
     standard)
-        HEADERS_TO_COPY+=("crashtracker" "telemetry")
+        HEADERS_TO_COPY+=("crashtracker" "telemetry" "blazesym")
         ;;
     full)
         HEADERS_TO_COPY+=("crashtracker" "telemetry" "data-pipeline" "library-config" "log" "ddsketch" "ffe" "blazesym")
