@@ -93,8 +93,9 @@ jobs:
           rustup target add ${{ matrix.target }}
 
       - name: Install cross-compilation tools (Linux only)
-        if: matrix.os == 'ubuntu-latest' && matrix.target != 'x86_64-unknown-linux-gnu'
+        if: matrix.os == 'ubuntu-latest'
         run: |
+          # Install cross for all Linux targets to ensure GLIBC 2.17 compatibility
           cargo install cross --git https://github.com/cross-rs/cross
           sudo apt-get update
           case "${{ matrix.target }}" in

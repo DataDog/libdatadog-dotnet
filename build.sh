@@ -203,25 +203,37 @@ if [ -n "$CARGO_BUILD_TARGET" ]; then
     esac
 
     # Determine if we need to use cross for this target
-    # Use cross for musl and ARM64 Linux targets that require C cross-compilers
+    # Use cross for Linux targets to ensure GLIBC 2.17 compatibility (via CentOS 7 Docker)
     # Don't use cross for macOS - use native cargo cross-compilation instead
     case "$CARGO_BUILD_TARGET" in
         *-apple-darwin)
             # macOS targets don't need cross - use native cargo
             USE_CROSS=false
             ;;
-        x86_64-unknown-linux-musl|aarch64-unknown-linux-gnu|aarch64-unknown-linux-musl)
+        x86_64-unknown-linux-gnu|aarch64-unknown-linux-gnu|x86_64-unknown-linux-musl|aarch64-unknown-linux-musl)
             if command -v cross &> /dev/null; then
                 USE_CROSS=true
-                print_cyan "  Using 'cross' for cross-compilation"
+                print_cyan "  Using 'cross' for cross-compilation (GLIBC 2.17 compatibility)"
             else
-                print_yellow "  Warning: 'cross' not found, trying native cargo (may fail for targets requiring C cross-compiler)"
+                print_yellow "  Warning: 'cross' not found, trying native cargo (may fail)"
             fi
             ;;
     esac
 fi
 
 cd libdatadog
+
+# Copy Cross.toml and Dockerfile into libdatadog for cross tool
+# Cross reads these from the directory where it's invoked
+if [ "$USE_CROSS" = true ] && [ -f "../Cross.toml" ]; then
+    print_gray "  Copying Cross.toml and Dockerfile for cross..."
+    cp -f ../Cross.toml .
+    if [ -d "../tools/docker" ]; then
+        rm -rf tools/docker
+        mkdir -p tools
+        cp -r ../tools/docker tools/
+    fi
+fi
 
 # Select cargo or cross
 CARGO_CMD="cargo"
