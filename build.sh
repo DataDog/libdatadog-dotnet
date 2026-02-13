@@ -107,7 +107,7 @@ print_gray "  Output directory: $OUTPUT_DIR"
 # Define feature sets
 case "$FEATURES" in
     minimal)
-        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,symbolizer,cbindgen"  # Core profiling + crashtracker + symbolizer (~5-6MB)
+        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,symbolizer,cbindgen"  # Core profiling + crashtracker + symbolizer + demangler (~5-6MB)
         ;;
     standard)
         FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,ddtelemetry-ffi,symbolizer,cbindgen"  # Most common features (~5-6MB)
