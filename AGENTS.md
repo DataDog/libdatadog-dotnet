@@ -131,6 +131,95 @@ OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 PACKAGE_DIR="$OUTPUT_DIR/libdatadog-$PLATFORM"
 ```
 
+### 6. GLIBC 2.17 Compatibility (Linux Only)
+
+**Problem:** Building on modern Linux (ubuntu-latest with GLIBC 2.35+) produces binaries that require GLIBC 2.30+, but consumers (dd-trace-dotnet) need GLIBC 2.17 compatibility for older systems like CentOS 7.
+
+**Symptoms:**
+```
+undefined reference to `pthread_attr_getguardsize@GLIBC_2.34'
+undefined reference to `stat64@GLIBC_2.33'
+```
+
+**Solution:** Use the `cross` tool with custom CentOS 7 Docker images.
+
+**Configuration Files:**
+- **Cross.toml** - Tells `cross` which Docker images to use for each Linux target
+- **tools/docker/Dockerfile.centos7** - Custom CentOS 7 image for x86_64
+- **tools/docker/Dockerfile.centos7-aarch64** - Custom CentOS 7 image for ARM64
+
+**How It Works:**
+1. GitHub Actions workflow installs `cross` for all Linux builds
+2. `build.sh` detects Linux targets and uses `cross` instead of `cargo`
+3. `cross` reads Cross.toml and builds Docker images from our Dockerfiles
+4. Dockerfiles use `centos:7` (GLIBC 2.17) as base, install gcc and Rust
+5. Compilation happens inside CentOS 7 containers → GLIBC 2.17 linkage
+
+**Why Not Use cross-rs Images:** The `ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main-centos` images no longer use CentOS 7 and have been updated to Ubuntu 20.04 (GLIBC 2.31+), making them unsuitable for our needs.
+
+**Build Time Impact:** First build takes ~5-10 minutes extra (Docker image build), subsequent builds are faster due to layer caching.
+
+**Verification:**
+```bash
+# Check GLIBC requirements (Linux only)
+objdump -T libdatadog_profiling.so | grep GLIBC | awk '{print $5}' | sort -V | tail -1
+# Expected: GLIBC_2.17
+```
+
+**Where:**
+- `Cross.toml` (root)
+- `tools/docker/Dockerfile.centos7`
+- `tools/docker/Dockerfile.centos7-aarch64`
+- `build.sh` lines 205-221 (cross detection)
+- `.github/workflows/build-platform.yml` lines 95-108 (cross installation)
+
+## Cross-Compilation with Docker
+
+### Linux GLIBC 2.17 Compatibility
+
+For Linux targets, we use the `cross` tool with custom CentOS 7 Docker images to ensure GLIBC 2.17 compatibility:
+
+**Process Flow:**
+```
+build.sh → detects Linux target → uses `cross` instead of `cargo`
+    ↓
+cross reads Cross.toml → finds Dockerfile path
+    ↓
+cross builds Docker image from Dockerfile (centos:7 base)
+    ↓
+cross runs cargo build INSIDE the container
+    ↓
+binaries linked against GLIBC 2.17 ✓
+```
+
+**Key Files:**
+- **Cross.toml**: Maps targets to Dockerfiles
+  ```toml
+  [target.x86_64-unknown-linux-gnu]
+  dockerfile = "./tools/docker/Dockerfile.centos7"
+  ```
+- **Dockerfile.centos7**: x86_64 CentOS 7 build environment
+  - Base: `centos:7` (GLIBC 2.17)
+  - Installs: gcc, cmake, git, Rust toolchain
+- **Dockerfile.centos7-aarch64**: ARM64 CentOS 7 build environment
+  - Base: `arm64v8/centos:7` (native ARM64)
+
+**Important:** Don't use `ghcr.io/cross-rs/*:main-centos` images - they've been updated to Ubuntu 20.04 (GLIBC 2.31+) and will produce incompatible binaries.
+
+### When cross is Used
+
+**Linux targets:**
+- `x86_64-unknown-linux-gnu` → uses cross with Dockerfile.centos7
+- `aarch64-unknown-linux-gnu` → uses cross with Dockerfile.centos7-aarch64
+- `x86_64-unknown-linux-musl` → uses cross with default cross-rs image
+- `aarch64-unknown-linux-musl` → uses cross with default cross-rs image
+
+**macOS targets:**
+- Uses native `cargo` cross-compilation (no Docker needed)
+
+**Windows targets:**
+- Uses native `cargo` (no cross-compilation needed)
+
 ## Platform-Specific Considerations
 
 ### Directory Structures Differ by OS
@@ -246,11 +335,18 @@ find libdatadog -name "dedup_headers*"
 - **release.yml**: Downloads artifacts, creates archives, publishes GitHub release
 
 ### Configuration
+- **Cross.toml**: Cross-compilation configuration (maps Linux targets to Docker images)
 - **LICENSE-3rdparty.csv**: Summary of dependencies (keep minimal)
 - **.cargo/config.toml**: Rust target-specific configuration (created during build)
 
+### Docker Images (Linux GLIBC 2.17)
+- **tools/docker/Dockerfile.centos7**: x86_64 Linux build environment (CentOS 7)
+- **tools/docker/Dockerfile.centos7-aarch64**: ARM64 Linux build environment (CentOS 7)
+
 ### Documentation
 - **PRDup.md**: Pull request description for header generation fix
+- **GLIBC_COMPATIBILITY.md**: Technical documentation for GLIBC 2.17 compatibility
+- **GLIBC_FIX_V2.md**: Detailed explanation of the custom CentOS 7 Docker approach
 - **AGENTS.md**: This file
 
 ## Testing Guidelines
@@ -298,6 +394,11 @@ grep -c "typedef struct ddog_Slice_CChar" output/.../profiling.h  # Should be 0
 **Cause:** Verification checking wrong path for Windows.
 **Fix:** Windows uses `release/dynamic/` not `lib/` (see Platform-Specific section)
 
+### "undefined reference to `XXX@GLIBC_2.30/2.33/2.34`"
+**Cause:** Building on modern Linux without using CentOS 7 Docker containers.
+**Fix:** Ensure `cross` is installed and being used for Linux targets. Check that Cross.toml and Dockerfiles exist and are correct (see Gotcha #6).
+**Verification:** Build logs should show "Using 'cross' for cross-compilation with GLIBC 2.17 compatibility"
+
 ## Best Practices
 
 ### When Modifying Build Scripts
@@ -337,12 +438,26 @@ When a build fails:
 
 ## Version History
 
-**Current:** Headers are generated per FFI module and deduplicated (post-fix)
-**Previous:** Headers were combined with duplicate definitions (caused compilation errors)
+### v1.2.13+ (Current): GLIBC 2.17 Compatibility
+- Use custom CentOS 7 Docker images for Linux builds
+- Ensures GLIBC 2.17 compatibility for all Linux binaries
+- Fixes: `undefined reference to XXX@GLIBC_2.30+` errors
 
-**Key Change:** Explicit cbindgen per module + dedup_headers tool from libdatadog
+### v1.2.8-v1.2.12: Header Generation Fix
+- Headers are generated per FFI module and deduplicated
+- Fixes: `error C2011: 'struct' type redefinition` errors
+- **Note:** v1.2.12 still had GLIBC 2.33/2.34 issues (before Docker fix)
 
-See `PRDup.md` for full details on the header generation fix.
+### Pre-v1.2.8: Initial Release
+- Headers combined with duplicate definitions
+- Built on ubuntu-latest (GLIBC 2.35+)
+
+**Key Changes:**
+1. Explicit cbindgen per module + dedup_headers tool (v1.2.8)
+2. Custom CentOS 7 Docker images for GLIBC 2.17 (v1.2.13)
+
+See `PRDup.md` for header generation fix details.
+See `GLIBC_FIX_V2.md` for GLIBC compatibility fix details.
 
 ## Additional Resources
 
@@ -361,6 +476,6 @@ When making changes that affect this guide:
 
 ---
 
-**Last Updated:** 2025-02 (Header generation fix)
+**Last Updated:** 2026-02 (GLIBC 2.17 compatibility + Header generation fix)
 **Maintained By:** Coding agents and repository maintainers
 **Purpose:** Preserve institutional knowledge for AI assistants

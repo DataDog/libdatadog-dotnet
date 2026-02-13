@@ -1,20 +1,42 @@
-# Dockerfile for building libdatadog for ARM64 with GLIBC 2.17 compatibility
-# Based on CentOS 7 which provides GLIBC 2.17
-# This matches the approach used by the official libdatadog releases
+# Custom Dockerfile for building libdatadog for ARM64 with GLIBC 2.17 compatibility
+# Uses CentOS 7 ARM64 (GLIBC 2.17) natively
 
-FROM ghcr.io/cross-rs/aarch64-unknown-linux-gnu:main-centos
+# Use ARM64 CentOS 7 image
+FROM arm64v8/centos:7
 
 # CentOS 7 is EOL - update repository URLs to use vault.centos.org
 RUN sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo \
     && sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/*.repo \
     && sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
 
-# Install additional dependencies
-RUN yum update -y \
-    && yum install -y unzip \
+# Install build dependencies
+RUN yum update -y && \
+    yum install -y \
+        gcc \
+        gcc-c++ \
+        make \
+        cmake \
+        git \
+        curl \
+        wget \
+        openssl-devel \
+        perl \
+        unzip \
     && yum clean all
 
-# The cross-rs base image already includes:
-# - Rust toolchain
-# - gcc/g++ targeting aarch64-unknown-linux-gnu
-# - CMake and other build tools
+# Install Rust
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+    sh -s -- -y --default-toolchain stable --profile minimal && \
+    chmod -R a+w $RUSTUP_HOME $CARGO_HOME && \
+    rustup --version && \
+    cargo --version && \
+    rustc --version
+
+# Set up cross-compilation environment variables
+ENV CARGO_BUILD_TARGET_DIR=/target \
+    CC=gcc \
+    CXX=g++
