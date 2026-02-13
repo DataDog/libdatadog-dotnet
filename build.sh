@@ -203,17 +203,17 @@ if [ -n "$CARGO_BUILD_TARGET" ]; then
     esac
 
     # Determine if we need to use cross for this target
-    # Use cross for musl and ARM64 Linux targets that require C cross-compilers
+    # Use cross for Linux targets to ensure GLIBC 2.17 compatibility (via CentOS 7 containers)
     # Don't use cross for macOS - use native cargo cross-compilation instead
     case "$CARGO_BUILD_TARGET" in
         *-apple-darwin)
             # macOS targets don't need cross - use native cargo
             USE_CROSS=false
             ;;
-        x86_64-unknown-linux-musl|aarch64-unknown-linux-gnu|aarch64-unknown-linux-musl)
+        x86_64-unknown-linux-gnu|aarch64-unknown-linux-gnu|x86_64-unknown-linux-musl|aarch64-unknown-linux-musl)
             if command -v cross &> /dev/null; then
                 USE_CROSS=true
-                print_cyan "  Using 'cross' for cross-compilation"
+                print_cyan "  Using 'cross' for cross-compilation with GLIBC 2.17 compatibility"
             else
                 print_yellow "  Warning: 'cross' not found, trying native cargo (may fail for targets requiring C cross-compiler)"
             fi

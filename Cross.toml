@@ -1,0 +1,10 @@
+# Cross-compilation configuration for libdatadog-dotnet
+# This file configures the `cross` tool to use specific Docker containers for different targets
+
+# Use CentOS 7 for x86_64 Linux to ensure GLIBC 2.17 compatibility
+[target.x86_64-unknown-linux-gnu]
+dockerfile = "./tools/docker/Dockerfile.centos7"
+
+# Use CentOS 7 for aarch64 Linux to ensure GLIBC 2.17 compatibility
+[target.aarch64-unknown-linux-gnu]
+dockerfile = "./tools/docker/Dockerfile.centos7-aarch64"
