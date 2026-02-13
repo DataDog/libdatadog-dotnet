@@ -107,7 +107,7 @@ print_gray "  Output directory: $OUTPUT_DIR"
 # Define feature sets
 case "$FEATURES" in
     minimal)
-        FEATURE_FLAGS="ddcommon-ffi,cbindgen"  # Core profiling only (~4MB) - fastest build
+        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,cbindgen"  # Core profiling + crashtracker (~4-5MB)
         ;;
     standard)
         FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,ddtelemetry-ffi,cbindgen"  # Most common features (~5-6MB)
@@ -497,6 +497,9 @@ fi
 HEADERS_TO_COPY=("profiling")
 
 case "$FEATURES" in
+    minimal)
+        HEADERS_TO_COPY+=("crashtracker")
+        ;;
     standard)
         HEADERS_TO_COPY+=("crashtracker" "telemetry")
         ;;

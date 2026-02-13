@@ -28,7 +28,7 @@ Write-Host "  Output directory: $OutputDir" -ForegroundColor Gray
 
 # Define feature sets
 $featureSets = @{
-    "minimal" = "ddcommon-ffi,cbindgen"  # Core profiling only (~4MB) - fastest build
+    "minimal" = "ddcommon-ffi,crashtracker-ffi,crashtracker-collector,cbindgen"  # Core profiling + crashtracker (~4-5MB)
     "standard" = "ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,ddtelemetry-ffi,cbindgen"  # Most common features (~5-6MB)
     "full" = "ddcommon-ffi,crashtracker-ffi,crashtracker-collector,crashtracker-receiver,demangler,ddtelemetry-ffi,data-pipeline-ffi,symbolizer,ddsketch-ffi,datadog-log-ffi,datadog-library-config-ffi,datadog-ffe-ffi,cbindgen"  # All features (~6.5MB) - matches original libdatadog
 }
@@ -226,6 +226,9 @@ if (Test-Path "$SourceHeaderDir\common.h") {
 $headersToCopy = @("profiling")
 
 switch ($Features) {
+    "minimal" {
+        $headersToCopy += @("crashtracker")
+    }
     "standard" {
         $headersToCopy += @("crashtracker", "telemetry")
     }
