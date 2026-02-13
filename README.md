@@ -22,10 +22,17 @@ This repository builds custom libdatadog binaries from the [libdatadog repositor
 
 ### Prerequisites
 
+**All Platforms:**
 - Rust 1.84.1 or newer
 - cargo
 - git
 - PowerShell (Windows) or Bash (Linux/macOS)
+
+**Linux Only (for GLIBC 2.17 compatibility):**
+- Docker (for cross-compilation with CentOS 7 containers)
+- [cross](https://github.com/cross-rs/cross) tool: `cargo install cross --git https://github.com/cross-rs/cross`
+
+**Note:** Linux builds use Docker containers based on CentOS 7 to ensure binaries are compatible with GLIBC 2.17 (required by dd-trace-dotnet for CentOS 7 support).
 
 ### Local Build
 
@@ -140,7 +147,36 @@ The libdatadog version is automatically determined at build time:
 - **Manual trigger with empty version:** Uses the latest code from the `main` branch (not the latest release)
 - **Manual trigger with specific version:** Uses the specified version tag or branch (e.g., `v26.0.0` or `main`)
 
-This allows you to build and release the latest libdatadog code anytime, even if libdatadog hasn't released a new version yet.
+This allows you to build and release the latest libdatalog code anytime, even if libdatadog hasn't released a new version yet.
+
+## Linux GLIBC Compatibility
+
+Linux binaries are built with **GLIBC 2.17 compatibility** to support older distributions like CentOS 7.
+
+### How It Works
+
+We use the [cross](https://github.com/cross-rs/cross) tool with custom Docker images based on CentOS 7:
+
+1. Build happens inside CentOS 7 Docker containers
+2. CentOS 7 provides GLIBC 2.17
+3. Resulting binaries link against GLIBC 2.17
+
+**Configuration files:**
+- `Cross.toml` - Maps Linux targets to Docker images
+- `tools/docker/Dockerfile.centos7` - x86_64 CentOS 7 build environment
+- `tools/docker/Dockerfile.centos7-aarch64` - ARM64 CentOS 7 build environment
+
+### Verification
+
+To verify GLIBC requirements of a Linux binary:
+
+```bash
+objdump -T libdatadog_profiling.so | grep GLIBC | awk '{print $5}' | sort -V | tail -1
+```
+
+Expected output: `GLIBC_2.17`
+
+For more details, see [GLIBC_COMPATIBILITY.md](GLIBC_COMPATIBILITY.md).
 
 For security vulnerabilities, please see our [Security Policy](SECURITY.md).
 
