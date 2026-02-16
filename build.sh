@@ -193,12 +193,22 @@ if [ -n "$CARGO_BUILD_TARGET" ]; then
     TARGET_SUBDIR="$CARGO_BUILD_TARGET/"
     print_cyan "  Target architecture: $CARGO_BUILD_TARGET"
 
-    # Enable dynamic linking for musl targets
-    # By default, musl uses static linking which prevents cdylib from being built
+    # Set RUSTFLAGS to match original libdatadog build:
+    #   - PIC relocation model (required for shared libraries)
+    #   - SONAME so the linker records just the filename in DT_NEEDED
     case "$CARGO_BUILD_TARGET" in
+        *-apple-darwin)
+            # macOS: only PIC (SONAME is handled via install_name_tool later)
+            EXTRA_RUSTFLAGS="-C relocation-model=pic"
+            ;;
         *-musl)
-            EXTRA_RUSTFLAGS="-C target-feature=-crt-static"
+            # musl: PIC + SONAME + dynamic linking (musl defaults to static)
+            EXTRA_RUSTFLAGS="-C relocation-model=pic -C link-arg=-Wl,-soname,libdatadog_profiling.so -C target-feature=-crt-static"
             print_cyan "  Enabling dynamic linking for musl target"
+            ;;
+        *-linux-gnu)
+            # glibc: PIC + SONAME
+            EXTRA_RUSTFLAGS="-C relocation-model=pic -C link-arg=-Wl,-soname,libdatadog_profiling.so"
             ;;
     esac
 
