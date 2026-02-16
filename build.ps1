@@ -28,7 +28,7 @@ Write-Host "  Output directory: $OutputDir" -ForegroundColor Gray
 
 # Define feature sets
 $featureSets = @{
-    "minimal" = "ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,symbolizer,datadog-library-config-ffi,cbindgen"  # Core features needed by dd-trace-dotnet
+    "minimal" = "ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,symbolizer,datadog-library-config-ffi,data-pipeline-ffi,cbindgen"  # Core features needed by dd-trace-dotnet
     "full" = "ddcommon-ffi,crashtracker-ffi,crashtracker-collector,crashtracker-receiver,demangler,ddtelemetry-ffi,data-pipeline-ffi,symbolizer,ddsketch-ffi,datadog-log-ffi,datadog-library-config-ffi,datadog-ffe-ffi,cbindgen"  # All features - matches original libdatadog
 }
 
@@ -226,7 +226,7 @@ $headersToCopy = @("profiling")
 
 switch ($Features) {
     "minimal" {
-        $headersToCopy += @("crashtracker", "blazesym", "library-config")
+        $headersToCopy += @("crashtracker", "blazesym", "library-config", "data-pipeline")
     }
     "full" {
         $headersToCopy += @("crashtracker", "telemetry", "data-pipeline", "library-config", "log", "ddsketch", "ffe", "blazesym")
