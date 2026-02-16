@@ -10,3 +10,8 @@ RUN sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo \
 
 RUN yum update -y \
     && yum install -y unzip
+
+# Set ARM architecture defines for assembly compilation
+# Required by aws-lc-sys and other packages with ARM assembly code
+ENV CFLAGS="-D__ARM_ARCH=8" \
+    CXXFLAGS="-D__ARM_ARCH=8"
