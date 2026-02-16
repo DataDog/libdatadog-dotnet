@@ -107,8 +107,8 @@ print_gray "  Output directory: $OUTPUT_DIR"
 # Define feature sets
 case "$FEATURES" in
     minimal)
-        # Core features needed by dd-trace-dotnet: profiling, crashtracker, symbolizer, demangler, library-config, data-pipeline
-        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,symbolizer,datadog-library-config-ffi,data-pipeline-ffi,cbindgen"
+        # Core features needed by dd-trace-dotnet: profiling, crashtracker, symbolizer, demangler, library-config, data-pipeline, log
+        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,symbolizer,datadog-library-config-ffi,data-pipeline-ffi,datadog-log-ffi,cbindgen"
         ;;
     full)
         # All features - matches original libdatadog
@@ -519,7 +519,7 @@ HEADERS_TO_COPY=("profiling")
 
 case "$FEATURES" in
     minimal)
-        HEADERS_TO_COPY+=("crashtracker" "blazesym" "library-config" "data-pipeline")
+        HEADERS_TO_COPY+=("crashtracker" "blazesym" "library-config" "data-pipeline" "log")
         ;;
     full)
         HEADERS_TO_COPY+=("crashtracker" "telemetry" "data-pipeline" "library-config" "log" "ddsketch" "ffe" "blazesym")

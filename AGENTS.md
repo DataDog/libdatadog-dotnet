@@ -16,6 +16,10 @@ This document provides essential context for AI coding agents working on the lib
 libdatadog-dotnet/
 ├── build.sh              # Linux/macOS build script
 ├── build.ps1             # Windows build script
+├── Cross.toml            # cross-rs configuration for Linux GLIBC 2.17 compatibility
+├── tools/docker/
+│   ├── Dockerfile.centos          # CentOS 7 image for x86_64 Linux builds
+│   └── Dockerfile.centos-aarch64  # CentOS 7 image for ARM64 Linux builds
 ├── .github/workflows/
 │   ├── build-platform.yml  # Reusable workflow for building a single platform
 │   ├── build.yml          # Main CI workflow (builds all platforms)
@@ -34,6 +38,72 @@ libdatadog-dotnet/
 4. **Deduplicate headers** using libdatadog's built-in tool
 5. **Package binaries** with appropriate directory structure
 6. **Upload artifacts** to GitHub Actions
+
+## Linux GLIBC 2.17 Compatibility
+
+### Overview
+
+Linux builds (both x86_64 and ARM64 for GNU targets) must be compatible with **GLIBC 2.17** (CentOS 7) to work with dd-trace-dotnet deployments on older systems.
+
+### Implementation
+
+**cross-rs with Custom Docker Images:**
+
+The builds use the `cross` tool with custom CentOS 7-based Docker images:
+
+```toml
+# Cross.toml
+[target.x86_64-unknown-linux-gnu]
+dockerfile = "./tools/docker/Dockerfile.centos"
+
+[target.aarch64-unknown-linux-gnu]
+dockerfile = "./tools/docker/Dockerfile.centos-aarch64"
+```
+
+**Docker Images:**
+
+Both Dockerfiles extend official cross-rs CentOS images:
+- `FROM ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main-centos`
+- `FROM ghcr.io/cross-rs/aarch64-unknown-linux-gnu:main-centos`
+
+They include CentOS 7 EOL repository fixes (vault.centos.org mirrors).
+
+**ARM64 Special Handling:**
+
+ARM64 compilation requires additional CFLAGS:
+```dockerfile
+ENV CFLAGS="-D__ARM_ARCH=8 -DAT_HWCAP2=26" \
+    CXXFLAGS="-D__ARM_ARCH=8 -DAT_HWCAP2=26"
+```
+
+These definitions compensate for missing macros in CentOS 7's old glibc headers.
+
+**RUSTFLAGS for Proper Linking:**
+
+The build scripts set RUSTFLAGS to ensure proper shared library linking:
+
+```bash
+# For Linux GNU targets
+RUSTFLAGS="-C relocation-model=pic -C link-arg=-Wl,-soname,libdatadog_profiling.so"
+
+# For musl targets
+RUSTFLAGS="-C relocation-model=pic -C link-arg=-Wl,-soname,libdatadog_profiling.so -C target-feature=-crt-static"
+```
+
+This ensures:
+- Position-independent code (PIC) for shared libraries
+- Proper SONAME in the .so file for dynamic linking
+- Static CRT disabled for musl (to allow cdylib builds)
+
+**Cross.toml Copying:**
+
+Since `cross` is invoked from inside the `libdatadog/` directory, the build script copies `Cross.toml` into that directory before building:
+
+```bash
+cp Cross.toml libdatadog/
+cd libdatadog
+cross build --target x86_64-unknown-linux-gnu ...
+```
 
 ## Critical Gotchas
 
@@ -131,6 +201,24 @@ OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 PACKAGE_DIR="$OUTPUT_DIR/libdatadog-$PLATFORM"
 ```
 
+### 6. Cross.toml Must Be in Working Directory
+
+**Problem:** The `cross` tool looks for `Cross.toml` in the current directory, but we invoke it from inside `libdatadog/`.
+
+**Impact:** Without Cross.toml, cross falls back to default images which have GLIBC 2.30+, breaking compatibility with CentOS 7.
+
+**Solution:**
+```bash
+# Copy Cross.toml into libdatadog before running cross
+cp Cross.toml libdatadog/
+cd libdatadog
+cross build --target x86_64-unknown-linux-gnu ...
+```
+
+**Where:** `build.sh` lines ~200-210
+
+**Verification:** Check cross output for "Using custom image from Cross.toml" or similar message.
+
 ## Platform-Specific Considerations
 
 ### Directory Structures Differ by OS
@@ -173,6 +261,46 @@ rustflags = ["-C", "target-feature=-crt-static"]
 
 **Location:** `libdatadog/.cargo/config.toml` (created during build)
 
+### ARM64 Linux Builds with CentOS 7
+
+**Issue:** CentOS 7's glibc 2.17 headers are missing ARM64-specific macros required by Rust crates with assembly code (e.g., aws-lc-sys).
+
+**Errors Without Fix:**
+- `#error "ARM assembler must define __ARM_ARCH"`
+- `error: 'AT_HWCAP2' undeclared`
+
+**Solution:** Define missing macros via CFLAGS in the Docker image:
+```dockerfile
+# tools/docker/Dockerfile.centos-aarch64
+ENV CFLAGS="-D__ARM_ARCH=8 -DAT_HWCAP2=26" \
+    CXXFLAGS="-D__ARM_ARCH=8 -DAT_HWCAP2=26"
+```
+
+**Values:**
+- `__ARM_ARCH=8`: ARMv8 architecture (ARM64/AArch64)
+- `AT_HWCAP2=26`: Auxiliary vector hardware capabilities 2 (standard value for ARM64)
+
+**Why Needed:** CentOS 7's glibc 2.17 was released before ARM64 became mainstream, so headers lack these definitions.
+
+### Linux GNU Targets with SONAME
+
+**Issue:** Shared libraries need proper SONAME for dynamic linking to work correctly in dd-trace-dotnet.
+
+**Solution:** Set RUSTFLAGS during build:
+```bash
+export RUSTFLAGS="-C relocation-model=pic -C link-arg=-Wl,-soname,libdatadog_profiling.so"
+```
+
+**What This Does:**
+- `-C relocation-model=pic`: Position-independent code (required for shared libraries)
+- `-C link-arg=-Wl,-soname,libdatadog_profiling.so`: Sets SONAME in the .so file
+
+**Verification:**
+```bash
+readelf -d libdatadog_profiling.so | grep SONAME
+# Should show: 0x000000000000000e (SONAME) Library soname: [libdatadog_profiling.so]
+```
+
 ## Common Tasks
 
 ### Adding a New Platform
@@ -204,17 +332,26 @@ Or override via:
 ### Changing Feature Presets
 
 Feature sets defined in:
-- `build.sh`: lines 108-122
+- `build.sh`: lines 107-122
 - `build.ps1`: lines 30-34
 
-Structure:
+Two presets are available:
+
+**minimal** (default): Core features required by dd-trace-dotnet
 ```bash
-minimal="ddcommon-ffi,cbindgen"
-standard="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,ddtelemetry-ffi,cbindgen"
-full="ddcommon-ffi,...all features...,cbindgen"
+ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,symbolizer,datadog-library-config-ffi,data-pipeline-ffi,cbindgen
+```
+
+**full**: All features - matches original libdatadog
+```bash
+ddcommon-ffi,crashtracker-ffi,crashtracker-collector,crashtracker-receiver,demangler,ddtelemetry-ffi,data-pipeline-ffi,symbolizer,ddsketch-ffi,datadog-log-ffi,datadog-library-config-ffi,datadog-ffe-ffi,cbindgen
 ```
 
 **Note:** Always include `cbindgen` feature (required for header generation during cargo build).
+
+**Headers copied per preset:**
+- minimal: profiling, crashtracker, blazesym, library-config, data-pipeline
+- full: profiling, crashtracker, telemetry, data-pipeline, library-config, log, ddsketch, ffe, blazesym
 
 ### Debugging Build Issues
 
@@ -246,6 +383,9 @@ find libdatadog -name "dedup_headers*"
 - **release.yml**: Downloads artifacts, creates archives, publishes GitHub release
 
 ### Configuration
+- **Cross.toml**: Cross-rs configuration for Linux GLIBC 2.17 compatibility
+- **tools/docker/Dockerfile.centos**: CentOS 7 Docker image for x86_64 Linux builds
+- **tools/docker/Dockerfile.centos-aarch64**: CentOS 7 Docker image for ARM64 Linux builds
 - **LICENSE-3rdparty.csv**: Summary of dependencies (keep minimal)
 - **.cargo/config.toml**: Rust target-specific configuration (created during build)
 
@@ -262,7 +402,7 @@ find libdatadog -name "dedup_headers*"
 ./build.sh --version v25.0.0 --platform x64-linux --features minimal --clean
 
 # Test with different features
-./build.ps1 -LibdatadogVersion v25.0.0 -Platform x64-windows -Features standard -Clean
+./build.ps1 -LibdatadogVersion v25.0.0 -Platform x64-windows -Features full -Clean
 
 # Verify headers
 ls -lh output/libdatadog-{platform}/include/datadog/*.h
@@ -298,6 +438,26 @@ grep -c "typedef struct ddog_Slice_CChar" output/.../profiling.h  # Should be 0
 **Cause:** Verification checking wrong path for Windows.
 **Fix:** Windows uses `release/dynamic/` not `lib/` (see Platform-Specific section)
 
+### "undefined reference to pthread_attr_getguardsize@GLIBC_2.34"
+**Cause:** Binary was built with GLIBC 2.30+ instead of 2.17 (CentOS 7).
+**Fix:** Ensure `cross` is using custom CentOS 7 Docker images from `Cross.toml`. Verify Cross.toml was copied to libdatadog/ before running cross.
+
+### "#error 'ARM assembler must define __ARM_ARCH'"
+**Cause:** Building ARM64 on CentOS 7 without architecture defines.
+**Fix:** Add `ENV CFLAGS="-D__ARM_ARCH=8"` to Dockerfile.centos-aarch64
+
+### "error: 'AT_HWCAP2' undeclared"
+**Cause:** CentOS 7's glibc 2.17 headers don't define AT_HWCAP2 for ARM64.
+**Fix:** Add `-DAT_HWCAP2=26` to CFLAGS in Dockerfile.centos-aarch64
+
+### "error while loading shared libraries: libdatadog_profiling.so: cannot open shared object file"
+**Cause:** Missing SONAME in shared library.
+**Fix:** Add RUSTFLAGS: `-C link-arg=-Wl,-soname,libdatadog_profiling.so` for Linux builds
+
+### "Unable to find an entry point named 'ddog_library_configurator_new'"
+**Cause:** Missing FFI module in feature preset.
+**Fix:** Add the required FFI module (e.g., `datadog-library-config-ffi`, `data-pipeline-ffi`) to the feature preset
+
 ## Best Practices
 
 ### When Modifying Build Scripts
@@ -320,7 +480,7 @@ grep -c "typedef struct ddog_Slice_CChar" output/.../profiling.h  # Should be 0
 
 1. **Update LICENSE-3rdparty.csv** if adding new crates/features
 2. **Copy LICENSE-3rdparty.yml** from libdatadog (don't duplicate)
-3. **Test build size impact** (minimal: 4MB, standard: 5-6MB, full: 6.5MB targets)
+3. **Test build size impact** (minimal and full presets have different sizes)
 
 ## Debugging Checklist
 
@@ -361,6 +521,6 @@ When making changes that affect this guide:
 
 ---
 
-**Last Updated:** 2025-02 (Header generation fix)
+**Last Updated:** 2025-02 (GLIBC 2.17 compatibility, minimal/full presets)
 **Maintained By:** Coding agents and repository maintainers
 **Purpose:** Preserve institutional knowledge for AI assistants
