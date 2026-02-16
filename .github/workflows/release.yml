@@ -34,7 +34,6 @@ on:
         type: choice
         options:
           - minimal
-          - standard
           - full
 
 # Default permissions for all jobs (least privilege principle)

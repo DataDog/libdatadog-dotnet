@@ -107,16 +107,15 @@ print_gray "  Output directory: $OUTPUT_DIR"
 # Define feature sets
 case "$FEATURES" in
     minimal)
-        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,symbolizer,cbindgen"  # Core profiling + crashtracker + symbolizer + demangler (~5-6MB)
-        ;;
-    standard)
-        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,ddtelemetry-ffi,symbolizer,cbindgen"  # Most common features (~5-6MB)
+        # Core features needed by dd-trace-dotnet: profiling, crashtracker, symbolizer, demangler, library-config
+        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,symbolizer,datadog-library-config-ffi,cbindgen"
         ;;
     full)
-        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,crashtracker-receiver,demangler,ddtelemetry-ffi,data-pipeline-ffi,symbolizer,ddsketch-ffi,datadog-log-ffi,datadog-library-config-ffi,datadog-ffe-ffi,cbindgen"  # All features (~6.5MB) - matches original libdatadog
+        # All features - matches original libdatadog
+        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,crashtracker-receiver,demangler,ddtelemetry-ffi,data-pipeline-ffi,symbolizer,ddsketch-ffi,datadog-log-ffi,datadog-library-config-ffi,datadog-ffe-ffi,cbindgen"
         ;;
     *)
-        print_red "Error: Invalid feature preset '$FEATURES'. Must be: minimal, standard, or full"
+        print_red "Error: Invalid feature preset '$FEATURES'. Must be: minimal or full"
         exit 1
         ;;
 esac
@@ -520,10 +519,7 @@ HEADERS_TO_COPY=("profiling")
 
 case "$FEATURES" in
     minimal)
-        HEADERS_TO_COPY+=("crashtracker" "blazesym")
-        ;;
-    standard)
-        HEADERS_TO_COPY+=("crashtracker" "telemetry" "blazesym")
+        HEADERS_TO_COPY+=("crashtracker" "blazesym" "library-config")
         ;;
     full)
         HEADERS_TO_COPY+=("crashtracker" "telemetry" "data-pipeline" "library-config" "log" "ddsketch" "ffe" "blazesym")
