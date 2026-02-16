@@ -13,5 +13,6 @@ RUN yum update -y \
 
 # Set ARM architecture defines for assembly compilation
 # Required by aws-lc-sys and other packages with ARM assembly code
-ENV CFLAGS="-D__ARM_ARCH=8" \
-    CXXFLAGS="-D__ARM_ARCH=8"
+# AT_HWCAP2 is missing in CentOS 7's old glibc headers, so define it manually (value = 26 on ARM64)
+ENV CFLAGS="-D__ARM_ARCH=8 -DAT_HWCAP2=26" \
+    CXXFLAGS="-D__ARM_ARCH=8 -DAT_HWCAP2=26"
