@@ -99,6 +99,12 @@ if ($env:CARGO_BUILD_TARGET) {
 
 Push-Location libdatadog
 
+# Set RUSTFLAGS to match official libdatadog build (builder/src/arch/windows.rs)
+# +crt-static: statically link the Visual C++ runtime so the DLL has no external CRT dependency
+# relocation-model=pic: position-independent code for shared libraries
+$env:RUSTFLAGS = "-C relocation-model=pic -C target-feature=+crt-static"
+Write-Host "  RUSTFLAGS: $env:RUSTFLAGS" -ForegroundColor Gray
+
 # Build release version
 # Note: The Cargo.toml already has optimized release profile:
 #   - opt-level = "s" (optimize for size)
