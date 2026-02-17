@@ -255,28 +255,47 @@ if [ -n "$EXTRA_RUSTFLAGS" ]; then
     export RUSTFLAGS="${RUSTFLAGS:-} $EXTRA_RUSTFLAGS"
 fi
 
-# Build release version
-# Note: The Cargo.toml already has optimized release profile:
-#   - opt-level = "s" (optimize for size)
-#   - lto = true (link-time optimization)
-#   - codegen-units = 1 (better optimization)
-#   - debug = "line-tables-only" (minimal debug info)
-print_gray "  Building release configuration with $CARGO_CMD..."
-$CARGO_CMD build --release -p libdd-profiling-ffi --features "$FEATURE_FLAGS" $CARGO_TARGET_ARG
+# Build from inside the crate directory using cargo rustc with explicit crate types
+# This matches the official libdatadog build (windows/build-artifacts.ps1)
+cd libdd-profiling-ffi
+
+# Release cdylib (shared library)
+print_gray "  Building release cdylib with $CARGO_CMD..."
+$CARGO_CMD rustc --features "$FEATURE_FLAGS" $CARGO_TARGET_ARG --release --crate-type cdylib
 if [ $? -ne 0 ]; then
-    print_red "Error: Release build failed"
+    print_red "Error: Release cdylib build failed"
+    cd ../..
     exit 1
 fi
 
-# Build debug version
-print_gray "  Building debug configuration with $CARGO_CMD..."
-$CARGO_CMD build -p libdd-profiling-ffi --features "$FEATURE_FLAGS" $CARGO_TARGET_ARG
+# Release staticlib
+print_gray "  Building release staticlib with $CARGO_CMD..."
+$CARGO_CMD rustc --features "$FEATURE_FLAGS" $CARGO_TARGET_ARG --release --crate-type staticlib
 if [ $? -ne 0 ]; then
-    print_red "Error: Debug build failed"
+    print_red "Error: Release staticlib build failed"
+    cd ../..
     exit 1
 fi
 
-cd ..
+# Debug cdylib (shared library)
+print_gray "  Building debug cdylib with $CARGO_CMD..."
+$CARGO_CMD rustc --features "$FEATURE_FLAGS" $CARGO_TARGET_ARG --crate-type cdylib
+if [ $? -ne 0 ]; then
+    print_red "Error: Debug cdylib build failed"
+    cd ../..
+    exit 1
+fi
+
+# Debug staticlib
+print_gray "  Building debug staticlib with $CARGO_CMD..."
+$CARGO_CMD rustc --features "$FEATURE_FLAGS" $CARGO_TARGET_ARG --crate-type staticlib
+if [ $? -ne 0 ]; then
+    print_red "Error: Debug staticlib build failed"
+    cd ../..
+    exit 1
+fi
+
+cd ../..
 
 # Verify build outputs exist (with target subdirectory if cross-compiling)
 RELEASE_DIR="libdatadog/target/${TARGET_SUBDIR}release"

@@ -97,40 +97,43 @@ if ($env:CARGO_BUILD_TARGET) {
     Write-Host "  Target architecture: $env:CARGO_BUILD_TARGET" -ForegroundColor Cyan
 }
 
-Push-Location libdatadog
-
 # Set RUSTFLAGS to match official libdatadog build (builder/src/arch/windows.rs)
 # +crt-static: statically link the Visual C++ runtime so the DLL has no external CRT dependency
 # relocation-model=pic: position-independent code for shared libraries
 $env:RUSTFLAGS = "-C relocation-model=pic -C target-feature=+crt-static"
 Write-Host "  RUSTFLAGS: $env:RUSTFLAGS" -ForegroundColor Gray
 
-# Build release version
-# Note: The Cargo.toml already has optimized release profile:
-#   - opt-level = "s" (optimize for size)
-#   - lto = true (link-time optimization)
-#   - codegen-units = 1 (better optimization)
-#   - debug = "line-tables-only" (minimal debug info)
-Write-Host "  Building release configuration..." -ForegroundColor Gray
-$releaseCmd = "cargo build --release -p libdd-profiling-ffi --features `"$featureFlags`" $cargoTargetArg"
-Write-Host "  Running: $releaseCmd" -ForegroundColor DarkGray
-Invoke-Expression $releaseCmd
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Error: Release build failed" -ForegroundColor Red
-    Pop-Location
-    exit 1
-}
+# Build from inside the crate directory using cargo rustc with explicit crate types
+# This matches the official libdatadog build (windows/build-artifacts.ps1)
+Push-Location libdatadog/libdd-profiling-ffi
 
-# Build debug version
-Write-Host "  Building debug configuration..." -ForegroundColor Gray
-$debugCmd = "cargo build -p libdd-profiling-ffi --features `"$featureFlags`" $cargoTargetArg"
-Write-Host "  Running: $debugCmd" -ForegroundColor DarkGray
-Invoke-Expression $debugCmd
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Error: Debug build failed" -ForegroundColor Red
-    Pop-Location
-    exit 1
-}
+# Release cdylib (DLL + import library)
+Write-Host "  Building release cdylib..." -ForegroundColor Gray
+$cmd = "cargo rustc --features `"$featureFlags`" $cargoTargetArg --release --crate-type cdylib"
+Write-Host "  Running: $cmd" -ForegroundColor DarkGray
+Invoke-Expression $cmd
+if ($LASTEXITCODE -ne 0) { Write-Host "Error: Release cdylib build failed" -ForegroundColor Red; Pop-Location; exit 1 }
+
+# Release staticlib
+Write-Host "  Building release staticlib..." -ForegroundColor Gray
+$cmd = "cargo rustc --features `"$featureFlags`" $cargoTargetArg --release --crate-type staticlib"
+Write-Host "  Running: $cmd" -ForegroundColor DarkGray
+Invoke-Expression $cmd
+if ($LASTEXITCODE -ne 0) { Write-Host "Error: Release staticlib build failed" -ForegroundColor Red; Pop-Location; exit 1 }
+
+# Debug cdylib
+Write-Host "  Building debug cdylib..." -ForegroundColor Gray
+$cmd = "cargo rustc --features `"$featureFlags`" $cargoTargetArg --crate-type cdylib"
+Write-Host "  Running: $cmd" -ForegroundColor DarkGray
+Invoke-Expression $cmd
+if ($LASTEXITCODE -ne 0) { Write-Host "Error: Debug cdylib build failed" -ForegroundColor Red; Pop-Location; exit 1 }
+
+# Debug staticlib
+Write-Host "  Building debug staticlib..." -ForegroundColor Gray
+$cmd = "cargo rustc --features `"$featureFlags`" $cargoTargetArg --crate-type staticlib"
+Write-Host "  Running: $cmd" -ForegroundColor DarkGray
+Invoke-Expression $cmd
+if ($LASTEXITCODE -ne 0) { Write-Host "Error: Debug staticlib build failed" -ForegroundColor Red; Pop-Location; exit 1 }
 
 Pop-Location
 
