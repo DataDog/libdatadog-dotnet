@@ -48,7 +48,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --version VERSION   Libdatadog version (default: v25.0.0)"
             echo "  --platform PLATFORM Target platform (default: x64-linux)"
             echo "  --output DIR        Output directory (default: output)"
-            echo "  --features PRESET   Feature preset: minimal, standard, or full (default: minimal)"
+            echo "  --features PRESET   Feature preset: minimal or standard (default: minimal)"
             echo "  --clean             Clean build directories before building"
             echo "  -h, --help          Show this help message"
             echo ""
@@ -110,12 +110,12 @@ case "$FEATURES" in
         # Core features needed by dd-trace-dotnet: profiling, crashtracker, symbolizer, demangler, library-config, data-pipeline, log
         FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,symbolizer,datadog-library-config-ffi,data-pipeline-ffi,datadog-log-ffi,cbindgen"
         ;;
-    full)
-        # All features - matches original libdatadog
-        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,crashtracker-receiver,demangler,ddtelemetry-ffi,data-pipeline-ffi,symbolizer,ddsketch-ffi,datadog-log-ffi,datadog-library-config-ffi,datadog-ffe-ffi,cbindgen"
+    standard)
+        # Matches official libdatadog build features (windows/build-artifacts.ps1)
+        FEATURE_FLAGS="data-pipeline-ffi,crashtracker-collector,crashtracker-receiver,ddtelemetry-ffi,demangler,datadog-library-config-ffi,datadog-ffe-ffi,datadog-log-ffi,cbindgen"
         ;;
     *)
-        print_red "Error: Invalid feature preset '$FEATURES'. Must be: minimal or full"
+        print_red "Error: Invalid feature preset '$FEATURES'. Must be: minimal or standard"
         exit 1
         ;;
 esac
@@ -521,8 +521,9 @@ case "$FEATURES" in
     minimal)
         HEADERS_TO_COPY+=("crashtracker" "blazesym" "library-config" "data-pipeline" "log")
         ;;
-    full)
-        HEADERS_TO_COPY+=("crashtracker" "telemetry" "data-pipeline" "library-config" "log" "ddsketch" "ffe" "blazesym")
+    standard)
+        # Matches official libdatadog headers: common, profiling, telemetry, data-pipeline, crashtracker, library-config
+        HEADERS_TO_COPY+=("crashtracker" "telemetry" "data-pipeline" "library-config" "log")
         ;;
 esac
 

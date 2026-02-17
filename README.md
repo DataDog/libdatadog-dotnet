@@ -38,7 +38,7 @@ This repository builds custom libdatadog binaries from the [libdatadog repositor
 ./build.ps1 -LibdatadogVersion v25.0.0
 
 # Build with different feature preset
-./build.ps1 -Features full
+./build.ps1 -Features standard
 
 # Clean build
 ./build.ps1 -Clean
@@ -53,7 +53,7 @@ This repository builds custom libdatadog binaries from the [libdatadog repositor
 ./build.sh --version v25.0.0
 
 # Build with different feature preset
-./build.sh --features full
+./build.sh --features standard
 
 # Clean build
 ./build.sh --clean
@@ -68,9 +68,9 @@ Two feature presets are available to control binary size and included components
 - **minimal** (default): Core features required by dd-trace-dotnet
   - Profiling FFI, crashtracker, symbolizer, demangler, library-config, data-pipeline
   - Smallest binaries, fastest builds
-- **full**: All features - matches original libdatadog
-  - Adds telemetry, ddsketch, log, crashtracker-receiver, and ffe modules
-  - Use for testing or if additional features are needed
+- **standard**: Matches official libdatadog build features
+  - Adds telemetry, crashtracker-receiver, and ffe modules
+  - Same feature set as the official `windows/build-artifacts.ps1` script
 
 Default is `minimal`.
 
@@ -119,7 +119,7 @@ The Release workflow builds binaries and creates a GitHub release:
   - `minor`: v1.0.9 → v1.1.0 (new features)
   - `major`: v1.0.9 → v2.0.0 (breaking changes)
 - **Release version** (optional): Manually specify version (e.g., `v1.2.0`) to override auto-increment
-- **Feature preset**: Choose `minimal` (default) or `full`
+- **Feature preset**: Choose `minimal` (default) or `standard`
 
 The workflow will:
 - Build binaries for all 8 platforms

@@ -13,7 +13,7 @@ param(
     [string]$LibdatadogVersion = "v25.0.0",
     [string]$OutputDir = "output",
     [string]$Platform = "x64-windows",
-    [ValidateSet("minimal", "full")]
+    [ValidateSet("minimal", "standard")]
     [string]$Features = "minimal",
     [switch]$Clean
 )
@@ -29,7 +29,7 @@ Write-Host "  Output directory: $OutputDir" -ForegroundColor Gray
 # Define feature sets
 $featureSets = @{
     "minimal" = "ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,symbolizer,datadog-library-config-ffi,data-pipeline-ffi,datadog-log-ffi,cbindgen"  # Core features needed by dd-trace-dotnet
-    "full" = "ddcommon-ffi,crashtracker-ffi,crashtracker-collector,crashtracker-receiver,demangler,ddtelemetry-ffi,data-pipeline-ffi,symbolizer,ddsketch-ffi,datadog-log-ffi,datadog-library-config-ffi,datadog-ffe-ffi,cbindgen"  # All features - matches original libdatadog
+    "standard" = "data-pipeline-ffi,crashtracker-collector,crashtracker-receiver,ddtelemetry-ffi,demangler,datadog-library-config-ffi,datadog-ffe-ffi,datadog-log-ffi,cbindgen"  # Matches official libdatadog build features
 }
 
 $featureFlags = $featureSets[$Features]
@@ -234,8 +234,9 @@ switch ($Features) {
     "minimal" {
         $headersToCopy += @("crashtracker", "blazesym", "library-config", "data-pipeline", "log")
     }
-    "full" {
-        $headersToCopy += @("crashtracker", "telemetry", "data-pipeline", "library-config", "log", "ddsketch", "ffe", "blazesym")
+    "standard" {
+        # Matches official libdatadog headers: common, profiling, telemetry, data-pipeline, crashtracker, library-config
+        $headersToCopy += @("crashtracker", "telemetry", "data-pipeline", "library-config", "log")
     }
 }
 

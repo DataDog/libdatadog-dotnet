@@ -28,13 +28,13 @@ on:
         required: false
         default: ''
       feature_preset:
-        description: 'Feature preset: minimal (profiling only, ~4MB), standard (with crashtracker/telemetry, ~5-6MB), or full (all features, ~6.5MB)'
+        description: 'Feature preset: minimal (core features for dd-trace-dotnet) or standard (matches official libdatadog build)'
         required: false
         default: 'minimal'
         type: choice
         options:
           - minimal
-          - full
+          - standard
 
 # Default permissions for all jobs (least privilege principle)
 permissions:

@@ -342,16 +342,16 @@ Two presets are available:
 ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,symbolizer,datadog-library-config-ffi,data-pipeline-ffi,cbindgen
 ```
 
-**full**: All features - matches original libdatadog
+**standard**: Matches official libdatadog build features (`windows/build-artifacts.ps1`)
 ```bash
-ddcommon-ffi,crashtracker-ffi,crashtracker-collector,crashtracker-receiver,demangler,ddtelemetry-ffi,data-pipeline-ffi,symbolizer,ddsketch-ffi,datadog-log-ffi,datadog-library-config-ffi,datadog-ffe-ffi,cbindgen
+data-pipeline-ffi,crashtracker-collector,crashtracker-receiver,ddtelemetry-ffi,demangler,datadog-library-config-ffi,datadog-ffe-ffi,datadog-log-ffi,cbindgen
 ```
 
 **Note:** Always include `cbindgen` feature (required for header generation during cargo build).
 
 **Headers copied per preset:**
-- minimal: profiling, crashtracker, blazesym, library-config, data-pipeline
-- full: profiling, crashtracker, telemetry, data-pipeline, library-config, log, ddsketch, ffe, blazesym
+- minimal: profiling, crashtracker, blazesym, library-config, data-pipeline, log
+- standard: profiling, crashtracker, telemetry, data-pipeline, library-config, log
 
 ### Debugging Build Issues
 
