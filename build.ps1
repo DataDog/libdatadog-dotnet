@@ -28,8 +28,8 @@ Write-Host "  Output directory: $OutputDir" -ForegroundColor Gray
 
 # Define feature sets
 $featureSets = @{
-    "minimal" = "ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,symbolizer,datadog-library-config-ffi,data-pipeline-ffi,datadog-log-ffi,cbindgen"  # Core features needed by dd-trace-dotnet
-    "standard" = "data-pipeline-ffi,crashtracker-collector,crashtracker-receiver,ddtelemetry-ffi,demangler,datadog-library-config-ffi,datadog-ffe-ffi,datadog-log-ffi,cbindgen"  # Matches official libdatadog build features
+    "minimal" = "ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,symbolizer,datadog-library-config-ffi,data-pipeline-ffi,datadog-log-ffi"  # Core features needed by dd-trace-dotnet
+    "standard" = "data-pipeline-ffi,crashtracker-collector,crashtracker-receiver,ddtelemetry-ffi,demangler,datadog-library-config-ffi,datadog-ffe-ffi,datadog-log-ffi"  # Matches official libdatadog build features
 }
 
 $featureFlags = $featureSets[$Features]
@@ -205,120 +205,80 @@ if (Test-Path "$DebugDir/datadog_profiling_ffi.lib") {
     Write-Host "  Warning: Debug static library (.lib) not found" -ForegroundColor Yellow
 }
 
-# Copy headers generated during cargo build
-Write-Host "  Copying headers from build output..." -ForegroundColor Gray
+# Generate headers using external cbindgen (matches official libdatadog build)
+Write-Host "  Generating headers with cbindgen..." -ForegroundColor Yellow
 
-# Headers are generated during cargo build (with cbindgen feature) to target/include/datadog/
-$SourceHeaderDir = "libdatadog\target\include\datadog"
+# Ensure cbindgen is installed
+try {
+    $null = Get-Command cbindgen -ErrorAction Stop
+    Write-Host "    cbindgen found" -ForegroundColor Gray
+} catch {
+    Write-Host "    Installing cbindgen..." -ForegroundColor Gray
+    cargo install cbindgen
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  Error: Failed to install cbindgen" -ForegroundColor Red
+        exit 1
+    }
+}
 
-# Verify source headers exist
-if (-not (Test-Path $SourceHeaderDir)) {
-    Write-Host "  Error: Header directory not found at $SourceHeaderDir" -ForegroundColor Red
-    Write-Host "  Headers should be generated during cargo build with cbindgen feature" -ForegroundColor Red
+# Build dedup_headers tool (build for host, not target)
+Write-Host "    Building dedup_headers tool..." -ForegroundColor Gray
+$savedTarget = $env:CARGO_BUILD_TARGET
+$env:CARGO_BUILD_TARGET = $null
+Push-Location libdatadog\tools
+cargo build --release --bin dedup_headers
+$buildResult = $LASTEXITCODE
+Pop-Location
+$env:CARGO_BUILD_TARGET = $savedTarget
+
+if ($buildResult -ne 0) {
+    Write-Host "  Error: Failed to build dedup_headers tool" -ForegroundColor Red
     exit 1
 }
+$dedupTool = "libdatadog\target\release\dedup_headers.exe"
 
-# Copy common.h
-Write-Host "    Copying common.h..." -ForegroundColor Gray
-if (Test-Path "$SourceHeaderDir\common.h") {
-    Copy-Item "$SourceHeaderDir\common.h" -Destination "$PackageDir\include\datadog\" -ErrorAction Stop
-} else {
-    Write-Host "  Error: common.h not found in build output" -ForegroundColor Red
-    exit 1
+# Generate headers per FFI crate using cbindgen (matching official libdatadog windows/build-artifacts.ps1)
+$headerDir = "$PackageDir\include\datadog"
+Push-Location libdatadog
+
+# Always generate: common, profiling, crashtracker, data-pipeline, library-config
+Write-Host "    Generating common.h..." -ForegroundColor Gray
+cbindgen --crate libdd-common-ffi --config libdd-common-ffi/cbindgen.toml --output "$headerDir\common.h"
+if ($LASTEXITCODE -ne 0) { Write-Host "Error: cbindgen failed for common" -ForegroundColor Red; Pop-Location; exit 1 }
+
+Write-Host "    Generating profiling.h..." -ForegroundColor Gray
+cbindgen --crate libdd-profiling-ffi --config libdd-profiling-ffi/cbindgen.toml --output "$headerDir\profiling.h"
+if ($LASTEXITCODE -ne 0) { Write-Host "Error: cbindgen failed for profiling" -ForegroundColor Red; Pop-Location; exit 1 }
+
+Write-Host "    Generating crashtracker.h..." -ForegroundColor Gray
+cbindgen --crate libdd-crashtracker-ffi --config libdd-crashtracker-ffi/cbindgen.toml --output "$headerDir\crashtracker.h"
+if ($LASTEXITCODE -ne 0) { Write-Host "Error: cbindgen failed for crashtracker" -ForegroundColor Red; Pop-Location; exit 1 }
+
+Write-Host "    Generating data-pipeline.h..." -ForegroundColor Gray
+cbindgen --crate libdd-data-pipeline-ffi --config libdd-data-pipeline-ffi/cbindgen.toml --output "$headerDir\data-pipeline.h"
+if ($LASTEXITCODE -ne 0) { Write-Host "Error: cbindgen failed for data-pipeline" -ForegroundColor Red; Pop-Location; exit 1 }
+
+Write-Host "    Generating library-config.h..." -ForegroundColor Gray
+cbindgen --crate libdd-library-config-ffi --config libdd-library-config-ffi/cbindgen.toml --output "$headerDir\library-config.h"
+if ($LASTEXITCODE -ne 0) { Write-Host "Error: cbindgen failed for library-config" -ForegroundColor Red; Pop-Location; exit 1 }
+
+# Conditionally generate telemetry.h (only for standard preset)
+$headersForDedup = @("$headerDir\common.h", "$headerDir\profiling.h", "$headerDir\crashtracker.h", "$headerDir\data-pipeline.h", "$headerDir\library-config.h")
+
+if ($Features -eq "standard") {
+    Write-Host "    Generating telemetry.h..." -ForegroundColor Gray
+    cbindgen --crate libdd-telemetry-ffi --config libdd-telemetry-ffi/cbindgen.toml --output "$headerDir\telemetry.h"
+    if ($LASTEXITCODE -ne 0) { Write-Host "Error: cbindgen failed for telemetry" -ForegroundColor Red; Pop-Location; exit 1 }
+    $headersForDedup += "$headerDir\telemetry.h"
 }
 
-# Determine which headers to copy based on feature preset
-$headersToCopy = @("profiling")
+Pop-Location
 
-switch ($Features) {
-    "minimal" {
-        $headersToCopy += @("crashtracker", "blazesym", "library-config", "data-pipeline", "log")
-    }
-    "standard" {
-        # Matches official libdatadog headers: common, profiling, telemetry, data-pipeline, crashtracker, library-config
-        $headersToCopy += @("crashtracker", "telemetry", "data-pipeline", "library-config", "log")
-    }
-}
-
-# Copy each header that exists
-$copiedHeaders = @()
-foreach ($headerName in $headersToCopy) {
-    $sourceHeader = "$SourceHeaderDir\$headerName.h"
-    if (Test-Path $sourceHeader) {
-        Write-Host "    Copying $headerName.h..." -ForegroundColor Gray
-        Copy-Item $sourceHeader -Destination "$PackageDir\include\datadog\" -ErrorAction Stop
-        $copiedHeaders += "$PackageDir\include\datadog\$headerName.h"
-    } else {
-        Write-Host "    Warning: $headerName.h not found in build output, skipping..." -ForegroundColor Yellow
-    }
-}
-
-# Deduplicate headers - move type definitions from child headers to common.h
-if ($copiedHeaders.Count -gt 0) {
-    Write-Host "  Deduplicating headers..." -ForegroundColor Gray
-
-    # Build the dedup_headers tool from libdatadog/tools if needed
-    # When CARGO_BUILD_TARGET is set, binaries go to target/$env:CARGO_BUILD_TARGET/release/
-    $toolPath = $null
-
-    # Determine the target directory based on CARGO_BUILD_TARGET
-    if ($env:CARGO_BUILD_TARGET) {
-        $targetDir = "libdatadog\target\$env:CARGO_BUILD_TARGET"
-    } else {
-        $targetDir = "libdatadog\target"
-    }
-
-    # Check for the tool in the target-specific directory first, then fallback to default
-    if (Test-Path "$targetDir\release\dedup_headers.exe") {
-        $toolPath = "$targetDir\release\dedup_headers.exe"
-    } elseif (Test-Path "$targetDir\debug\dedup_headers.exe") {
-        $toolPath = "$targetDir\debug\dedup_headers.exe"
-    } elseif (Test-Path "libdatadog\target\release\dedup_headers.exe") {
-        $toolPath = "libdatadog\target\release\dedup_headers.exe"
-    } elseif (Test-Path "libdatadog\target\debug\dedup_headers.exe") {
-        $toolPath = "libdatadog\target\debug\dedup_headers.exe"
-    }
-
-    if (-not $toolPath) {
-        Write-Host "    Building dedup_headers tool..." -ForegroundColor Gray
-        Push-Location libdatadog\tools
-        # Build for the host architecture, not the target (unset CARGO_BUILD_TARGET)
-        # We need to run this tool on the build machine, not on the target
-        $savedTarget = $env:CARGO_BUILD_TARGET
-        $env:CARGO_BUILD_TARGET = $null
-        cargo build --release --bin dedup_headers
-        $buildResult = $LASTEXITCODE
-        $env:CARGO_BUILD_TARGET = $savedTarget
-
-        if ($buildResult -eq 0) {
-            Pop-Location
-            # Tool is built for host, so it's in libdatadog\target\release\
-            if (Test-Path "libdatadog\target\release\dedup_headers.exe") {
-                $toolPath = "libdatadog\target\release\dedup_headers.exe"
-                Write-Host "    Found at: $toolPath" -ForegroundColor Gray
-            } else {
-                Write-Host "    Warning: dedup_headers binary not found at libdatadog\target\release\dedup_headers.exe" -ForegroundColor Yellow
-            }
-        } else {
-            Pop-Location
-            Write-Host "    Warning: Failed to build dedup_headers tool. Headers may contain duplicate definitions." -ForegroundColor Yellow
-        }
-    }
-
-    # Filter out blazesym.h from deduplication (it's a third-party header)
-    $headersToDedup = $copiedHeaders | Where-Object { $_ -notlike "*blazesym.h" }
-
-    # Use the dedup_headers tool
-    if ($toolPath -and $headersToDedup.Count -gt 0) {
-        Write-Host "    Running dedup_headers on $($headersToDedup.Count) header(s)..." -ForegroundColor Gray
-        $headerArgs = @("$PackageDir\include\datadog\common.h") + $headersToDedup
-        & ".\$toolPath" $headerArgs
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "    Warning: dedup_headers failed. Headers may contain duplicate definitions." -ForegroundColor Yellow
-        }
-    } else {
-        Write-Host "  Warning: dedup_headers tool not found. Headers may contain duplicate definitions." -ForegroundColor Yellow
-    }
+# Deduplicate headers (moves shared type definitions into common.h)
+Write-Host "    Running dedup_headers..." -ForegroundColor Gray
+& ".\$dedupTool" $headersForDedup
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  Warning: dedup_headers failed. Headers may contain duplicate definitions." -ForegroundColor Yellow
 }
 
 # Verify critical headers exist

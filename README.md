@@ -77,9 +77,9 @@ Default is `minimal`.
 ### What the Build Does
 
 1. Clones the libdatadog repository at the specified version
-2. Builds the profiling FFI crate with cbindgen feature for header generation
-3. Generates C/C++ header files (`include/datadog/*.h`)
-4. Builds both debug and release configurations
+2. Builds the profiling FFI crate (release + debug configurations)
+3. Generates C/C++ headers using external `cbindgen` CLI per crate (matching official libdatadog build)
+4. Deduplicates headers using libdatadog's `dedup_headers` tool
 5. Collects binaries, headers, and license files
 6. Packages them in the structure expected by dd-trace-dotnet
 

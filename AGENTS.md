@@ -34,8 +34,8 @@ libdatadog-dotnet/
 
 1. **Clone libdatadog** at specified version/tag
 2. **Build profiling FFI** with cargo (release + debug)
-3. **Generate C headers** using cbindgen for each FFI module
-4. **Deduplicate headers** using libdatadog's built-in tool
+3. **Generate C headers** using external cbindgen CLI per crate (matching official libdatadog `windows/build-artifacts.ps1`)
+4. **Deduplicate headers** using libdatadog's built-in `dedup_headers` tool
 5. **Package binaries** with appropriate directory structure
 6. **Upload artifacts** to GitHub Actions
 
@@ -124,24 +124,25 @@ export CARGO_BUILD_TARGET="$SAVED_TARGET"
 
 **Where:** `build.sh` lines 540-560, `build.ps1` lines 268-295
 
-### 2. Header Generation Must Be Explicit
+### 2. Header Generation Uses External cbindgen
 
-**Problem:** Building `libdd-profiling-ffi` with `cbindgen` feature generates combined headers with duplicate type definitions.
+**Problem:** The `cbindgen` cargo feature auto-generates headers during build, but produces different output than the official libdatadog release (extra headers, different types in common.h).
 
-**Solution:** Generate separate headers for each FFI module using cbindgen directly:
+**Solution:** Use external `cbindgen` CLI per crate with each crate's `cbindgen.toml`, matching the official `windows/build-artifacts.ps1`:
 ```bash
-cd libdatadog/libdd-common-ffi
-cbindgen --output "$PACKAGE_DIR/include/datadog/common.h"
-cd ../../
-
-cd libdatadog/libdd-profiling-ffi
-cbindgen --output "$PACKAGE_DIR/include/datadog/profiling.h"
-cd ../../
+cd libdatadog
+cbindgen --crate libdd-common-ffi --config libdd-common-ffi/cbindgen.toml --output "$HEADER_DIR/common.h"
+cbindgen --crate libdd-profiling-ffi --config libdd-profiling-ffi/cbindgen.toml --output "$HEADER_DIR/profiling.h"
+cbindgen --crate libdd-crashtracker-ffi --config libdd-crashtracker-ffi/cbindgen.toml --output "$HEADER_DIR/crashtracker.h"
+cbindgen --crate libdd-data-pipeline-ffi --config libdd-data-pipeline-ffi/cbindgen.toml --output "$HEADER_DIR/data-pipeline.h"
+cbindgen --crate libdd-library-config-ffi --config libdd-library-config-ffi/cbindgen.toml --output "$HEADER_DIR/library-config.h"
+# Only for standard preset:
+cbindgen --crate libdd-telemetry-ffi --config libdd-telemetry-ffi/cbindgen.toml --output "$HEADER_DIR/telemetry.h"
 ```
 
-Then deduplicate to remove types from `profiling.h` that exist in `common.h`.
+Then run `dedup_headers` to move shared type definitions into `common.h`.
 
-**Why:** This matches official libdatadog release structure and prevents `error C2011: 'struct' type redefinition` errors.
+**Why:** This matches official libdatadog release structure exactly and prevents `error C2011: 'struct' type redefinition` errors.
 
 ### 3. Argument Parsing in build.sh
 
@@ -347,7 +348,7 @@ ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,symbolizer,datado
 data-pipeline-ffi,crashtracker-collector,crashtracker-receiver,ddtelemetry-ffi,demangler,datadog-library-config-ffi,datadog-ffe-ffi,datadog-log-ffi,cbindgen
 ```
 
-**Note:** Always include `cbindgen` feature (required for header generation during cargo build).
+**Note:** Headers are generated using external `cbindgen` CLI (matching the official libdatadog build), NOT the `cbindgen` cargo feature.
 
 **Headers copied per preset:**
 - minimal: profiling, crashtracker, blazesym, library-config, data-pipeline, log

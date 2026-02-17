@@ -117,6 +117,9 @@ jobs:
           brew install llvm
           echo "$(brew --prefix llvm)/bin" >> $GITHUB_PATH
 
+      - name: Install cbindgen
+        run: cargo install cbindgen
+
       - name: Build ${{ matrix.platform }}
         env:
           CARGO_BUILD_TARGET: ${{ matrix.target }}
