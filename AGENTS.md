@@ -340,7 +340,7 @@ Two presets are available:
 
 **minimal** (default): Core features required by dd-trace-dotnet
 ```bash
-ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,datadog-library-config-ffi,data-pipeline-ffi,datadog-log-ffi
+ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,symbolizer,datadog-library-config-ffi,data-pipeline-ffi,datadog-log-ffi
 ```
 
 **standard**: Matches official libdatadog build features (`windows/build-artifacts.ps1`)
