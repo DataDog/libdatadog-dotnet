@@ -311,10 +311,6 @@ Copy-Item "libdatadog/LICENSE" -Destination "$PackageDir/" -ErrorAction Silently
 if (Test-Path "libdatadog/NOTICE") {
     Copy-Item "libdatadog/NOTICE" -Destination "$PackageDir/" -ErrorAction SilentlyContinue
 }
-# Copy LICENSE-3rdparty.csv from libdatadog-dotnet root (summary of components)
-if (Test-Path "LICENSE-3rdparty.csv") {
-    Copy-Item "LICENSE-3rdparty.csv" -Destination "$PackageDir/" -ErrorAction SilentlyContinue
-}
 # Copy LICENSE-3rdparty.yml from libdatadog (full license texts)
 if (Test-Path "libdatadog/LICENSE-3rdparty.yml") {
     Copy-Item "libdatadog/LICENSE-3rdparty.yml" -Destination "$PackageDir/" -ErrorAction SilentlyContinue

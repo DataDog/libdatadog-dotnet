@@ -664,8 +664,6 @@ print_gray "  Copying license files..."
 cp libdatadog/LICENSE "$PACKAGE_DIR/" 2>/dev/null || true
 # Copy NOTICE from libdatadog
 [ -f "libdatadog/NOTICE" ] && cp libdatadog/NOTICE "$PACKAGE_DIR/" 2>/dev/null || true
-# Copy LICENSE-3rdparty.csv from libdatadog-dotnet root (summary of components)
-[ -f "LICENSE-3rdparty.csv" ] && cp LICENSE-3rdparty.csv "$PACKAGE_DIR/" 2>/dev/null || true
 # Copy LICENSE-3rdparty.yml from libdatadog (full license texts)
 [ -f "libdatadog/LICENSE-3rdparty.yml" ] && cp libdatadog/LICENSE-3rdparty.yml "$PACKAGE_DIR/" 2>/dev/null || true
 
