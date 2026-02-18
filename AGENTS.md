@@ -340,12 +340,12 @@ Two presets are available:
 
 **minimal** (default): Core features required by dd-trace-dotnet
 ```bash
-ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,symbolizer,datadog-library-config-ffi,data-pipeline-ffi,cbindgen
+ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,datadog-library-config-ffi,data-pipeline-ffi,datadog-log-ffi
 ```
 
 **standard**: Matches official libdatadog build features (`windows/build-artifacts.ps1`)
 ```bash
-data-pipeline-ffi,crashtracker-collector,crashtracker-receiver,ddtelemetry-ffi,demangler,datadog-library-config-ffi,datadog-ffe-ffi,datadog-log-ffi,cbindgen
+data-pipeline-ffi,crashtracker-collector,crashtracker-receiver,ddtelemetry-ffi,demangler,datadog-library-config-ffi,datadog-ffe-ffi,datadog-log-ffi
 ```
 
 **Note:** Headers are generated using external `cbindgen` CLI (matching the official libdatadog build), NOT the `cbindgen` cargo feature.

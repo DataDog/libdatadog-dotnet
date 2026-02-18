@@ -107,8 +107,8 @@ print_gray "  Output directory: $OUTPUT_DIR"
 # Define feature sets
 case "$FEATURES" in
     minimal)
-        # Core features needed by dd-trace-dotnet: profiling, crashtracker, symbolizer, demangler, library-config, data-pipeline, log
-        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,symbolizer,datadog-library-config-ffi,data-pipeline-ffi,datadog-log-ffi"
+        # Core features needed by dd-trace-dotnet: profiling, crashtracker, demangler, library-config, data-pipeline, log
+        FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,datadog-library-config-ffi,data-pipeline-ffi,datadog-log-ffi"
         ;;
     standard)
         # Matches official libdatadog build features (windows/build-artifacts.ps1)

@@ -28,7 +28,7 @@ Write-Host "  Output directory: $OutputDir" -ForegroundColor Gray
 
 # Define feature sets
 $featureSets = @{
-    "minimal" = "ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,symbolizer,datadog-library-config-ffi,data-pipeline-ffi,datadog-log-ffi"  # Core features needed by dd-trace-dotnet
+    "minimal" = "ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,datadog-library-config-ffi,data-pipeline-ffi,datadog-log-ffi"  # Core features needed by dd-trace-dotnet
     "standard" = "data-pipeline-ffi,crashtracker-collector,crashtracker-receiver,ddtelemetry-ffi,demangler,datadog-library-config-ffi,datadog-ffe-ffi,datadog-log-ffi"  # Matches official libdatadog build features
 }
 

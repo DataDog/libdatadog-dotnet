@@ -66,7 +66,7 @@ The build artifacts will be placed in the `output/` directory.
 Two feature presets are available to control binary size and included components:
 
 - **minimal** (default): Core features required by dd-trace-dotnet
-  - Profiling FFI, crashtracker, symbolizer, demangler, library-config, data-pipeline
+  - Profiling FFI, crashtracker, demangler, library-config, data-pipeline
   - Smallest binaries, fastest builds
 - **standard**: Matches official libdatadog build features
   - Adds telemetry, crashtracker-receiver, and ffe modules
