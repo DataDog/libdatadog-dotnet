@@ -77,11 +77,23 @@ Default is `minimal`.
 ### What the Build Does
 
 1. Clones the libdatadog repository at the specified version
-2. Builds the profiling FFI crate (release + debug configurations)
-3. Generates C/C++ headers using external `cbindgen` CLI per crate (matching official libdatadog build)
+2. Builds the profiling FFI crate using `cargo rustc --crate-type cdylib/staticlib` (release + debug)
+3. Generates C/C++ headers using external `cbindgen` CLI per crate
 4. Deduplicates headers using libdatadog's `dedup_headers` tool
-5. Collects binaries, headers, and license files
-6. Packages them in the structure expected by dd-trace-dotnet
+5. Strips binaries and extracts debug symbols (Linux/macOS)
+6. Packages binaries, headers, and license files for dd-trace-dotnet
+
+### Alignment with Official libdatadog Build
+
+The build process is designed to match the official libdatadog compilation as closely as possible, differing only where needed for .NET-specific requirements:
+
+- **Build command**: Uses `cargo rustc --crate-type` with explicit crate types, same as `windows/build-artifacts.ps1`
+- **RUSTFLAGS**: Identical per platform (PIC, crt-static on Windows, SONAME on Linux)
+- **Header generation**: External `cbindgen` CLI per FFI crate with `dedup_headers`, same as the official scripts
+- **Library stripping**: Same objcopy/strip pipeline (debug symbol extraction, LLVM bitcode removal)
+- **Release profile**: Same `opt-level = "s"`, `lto = true`, `codegen-units = 1` from the workspace Cargo.toml
+
+The **minimal** preset reduces binary size by including only the features dd-trace-dotnet needs, while the **standard** preset produces binaries with the exact same feature set as the official release.
 
 ### Linux Builds and GLIBC Compatibility
 
