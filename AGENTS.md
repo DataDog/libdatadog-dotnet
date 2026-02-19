@@ -33,7 +33,7 @@ libdatadog-dotnet/
 ### Build Flow
 
 1. **Clone libdatadog** at specified version/tag
-2. **Build profiling FFI** with cargo (release + debug)
+2. **Build profiling FFI** with `cargo rustc --crate-type cdylib/staticlib` (release + debug)
 3. **Generate C headers** using external cbindgen CLI per crate (matching official libdatadog `windows/build-artifacts.ps1`)
 4. **Deduplicate headers** using libdatadog's built-in `dedup_headers` tool
 5. **Package binaries** with appropriate directory structure
@@ -212,11 +212,11 @@ PACKAGE_DIR="$OUTPUT_DIR/libdatadog-$PLATFORM"
 ```bash
 # Copy Cross.toml into libdatadog before running cross
 cp Cross.toml libdatadog/
-cd libdatadog
-cross build --target x86_64-unknown-linux-gnu ...
+cd libdatadog/libdd-profiling-ffi
+cross rustc --features "..." --target x86_64-unknown-linux-gnu --release --crate-type cdylib
 ```
 
-**Where:** `build.sh` lines ~200-210
+**Where:** `build.sh` lines ~235-260
 
 **Verification:** Check cross output for "Using custom image from Cross.toml" or similar message.
 
@@ -387,7 +387,7 @@ find libdatadog -name "dedup_headers*"
 - **Cross.toml**: Cross-rs configuration for Linux GLIBC 2.17 compatibility
 - **tools/docker/Dockerfile.centos**: CentOS 7 Docker image for x86_64 Linux builds
 - **tools/docker/Dockerfile.centos-aarch64**: CentOS 7 Docker image for ARM64 Linux builds
-- **LICENSE-3rdparty.csv**: Summary of dependencies (keep minimal)
+- **LICENSE-3rdparty.csv**: Summary of our dependencies on libdatadog (not shipped in packages)
 - **.cargo/config.toml**: Rust target-specific configuration (created during build)
 
 ### Documentation
@@ -403,7 +403,7 @@ find libdatadog -name "dedup_headers*"
 ./build.sh --version v25.0.0 --platform x64-linux --features minimal --clean
 
 # Test with different features
-./build.ps1 -LibdatadogVersion v25.0.0 -Platform x64-windows -Features full -Clean
+./build.ps1 -LibdatadogVersion v25.0.0 -Platform x64-windows -Features standard -Clean
 
 # Verify headers
 ls -lh output/libdatadog-{platform}/include/datadog/*.h
@@ -522,6 +522,6 @@ When making changes that affect this guide:
 
 ---
 
-**Last Updated:** 2025-02 (GLIBC 2.17 compatibility, minimal/full presets)
+**Last Updated:** 2026-02 (aligned build with official libdatadog: cargo rustc, external cbindgen, RUSTFLAGS, feature presets)
 **Maintained By:** Coding agents and repository maintainers
 **Purpose:** Preserve institutional knowledge for AI assistants

@@ -163,4 +163,4 @@ For security vulnerabilities, please see our [Security Policy](SECURITY.md).
 
 Apache License 2.0. See [LICENSE](LICENSE) file.
 
-For third-party licenses, see [LICENSE-3rdparty.csv](LICENSE-3rdparty.csv).
+Packages include `LICENSE-3rdparty.yml` from libdatadog with full third-party license texts.
