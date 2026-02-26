@@ -27,14 +27,6 @@ on:
         description: 'Manual version override (e.g., v1.0.0). Leave empty to auto-increment.'
         required: false
         default: ''
-      feature_preset:
-        description: 'Feature preset: minimal (core features for dd-trace-dotnet) or standard (matches official libdatadog build)'
-        required: false
-        default: 'minimal'
-        type: choice
-        options:
-          - minimal
-          - standard
 
 # Default permissions for all jobs (least privilege principle)
 permissions:
@@ -48,7 +40,7 @@ jobs:
       contents: read
     with:
       libdatadog_version: ${{ github.event.inputs.libdatadog_version || 'main' }}
-      feature_preset: ${{ github.event.inputs.feature_preset || 'minimal' }}
+      feature_preset: 'minimal'
       verify_artifacts: false
 
   create-release:
@@ -224,7 +216,7 @@ jobs:
           ## Build Information
 
           - **Libdatadog version**: ${{ github.event.inputs.libdatadog_version || 'main' }}
-          - **Feature preset**: ${{ github.event.inputs.feature_preset }}
+          - **Feature preset**: minimal
 
           ## Checksums
 

@@ -330,29 +330,19 @@ Or override via:
 - CLI: `./build.sh --version v26.0.0`
 - Workflow input: `libdatadog_version` parameter
 
-### Changing Feature Presets
+### Feature Flags
 
-Feature sets defined in:
-- `build.sh`: lines 107-122
-- `build.ps1`: lines 30-34
+Feature flags are defined in:
+- `build.sh`: line ~108
+- `build.ps1`: line ~30
 
-Two presets are available:
-
-**minimal** (default): Core features required by dd-trace-dotnet
 ```bash
 ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,symbolizer,datadog-library-config-ffi,data-pipeline-ffi,datadog-log-ffi
 ```
 
-**standard**: Matches official libdatadog build features (`windows/build-artifacts.ps1`)
-```bash
-data-pipeline-ffi,crashtracker-collector,crashtracker-receiver,ddtelemetry-ffi,demangler,datadog-library-config-ffi,datadog-ffe-ffi,datadog-log-ffi
-```
+These are the core features required by dd-trace-dotnet. Headers are generated using external `cbindgen` CLI (matching the official libdatadog build), NOT the `cbindgen` cargo feature.
 
-**Note:** Headers are generated using external `cbindgen` CLI (matching the official libdatadog build), NOT the `cbindgen` cargo feature.
-
-**Headers copied per preset:**
-- minimal: profiling, crashtracker, blazesym, library-config, data-pipeline, log
-- standard: profiling, crashtracker, telemetry, data-pipeline, library-config, log
+**Headers generated:** common, profiling, crashtracker, data-pipeline, library-config, blazesym
 
 ### Debugging Build Issues
 
@@ -402,8 +392,8 @@ find libdatadog -name "dedup_headers*"
 # Minimal build (fastest)
 ./build.sh --version v25.0.0 --platform x64-linux --features minimal --clean
 
-# Test with different features
-./build.ps1 -LibdatadogVersion v25.0.0 -Platform x64-windows -Features standard -Clean
+# Test with specific version
+./build.ps1 -LibdatadogVersion v25.0.0 -Platform x64-windows -Clean
 
 # Verify headers
 ls -lh output/libdatadog-{platform}/include/datadog/*.h

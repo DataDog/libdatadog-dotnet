@@ -38,7 +38,7 @@ This repository builds custom libdatadog binaries from the [libdatadog repositor
 ./build.ps1 -LibdatadogVersion v25.0.0
 
 # Build with different feature preset
-./build.ps1 -Features standard
+./build.ps1 -LibdatadogVersion v25.0.0
 
 # Clean build
 ./build.ps1 -Clean
@@ -53,7 +53,7 @@ This repository builds custom libdatadog binaries from the [libdatadog repositor
 ./build.sh --version v25.0.0
 
 # Build with different feature preset
-./build.sh --features standard
+./build.sh --version v25.0.0
 
 # Clean build
 ./build.sh --clean
@@ -61,18 +61,11 @@ This repository builds custom libdatadog binaries from the [libdatadog repositor
 
 The build artifacts will be placed in the `output/` directory.
 
-### Feature Presets
+### Features
 
-Two feature presets are available to control binary size and included components:
+The build includes the core features required by dd-trace-dotnet:
 
-- **minimal** (default): Core features required by dd-trace-dotnet
-  - Profiling FFI, crashtracker, symbolizer, demangler, library-config, data-pipeline
-  - Smallest binaries, fastest builds
-- **standard**: Matches official libdatadog build features
-  - Adds telemetry, crashtracker-receiver, and ffe modules
-  - Same feature set as the official `windows/build-artifacts.ps1` script
-
-Default is `minimal`.
+- Profiling FFI, crashtracker, symbolizer, demangler, library-config, data-pipeline, log
 
 ### What the Build Does
 
@@ -93,7 +86,7 @@ The build process is designed to match the official libdatadog compilation as cl
 - **Library stripping**: Same objcopy/strip pipeline (debug symbol extraction, LLVM bitcode removal)
 - **Release profile**: Same `opt-level = "s"`, `lto = true`, `codegen-units = 1` from the workspace Cargo.toml
 
-The **minimal** preset reduces binary size by including only the features dd-trace-dotnet needs, while the **standard** preset produces binaries with the exact same feature set as the official release.
+The build includes only the features dd-trace-dotnet needs, reducing binary size compared to the official release.
 
 ### Linux Builds and GLIBC Compatibility
 
@@ -131,7 +124,7 @@ The Release workflow builds binaries and creates a GitHub release:
   - `minor`: v1.0.9 → v1.1.0 (new features)
   - `major`: v1.0.9 → v2.0.0 (breaking changes)
 - **Release version** (optional): Manually specify version (e.g., `v1.2.0`) to override auto-increment
-- **Feature preset**: Choose `minimal` (default) or `standard`
+- **Feature preset**: `minimal` (core features for dd-trace-dotnet)
 
 The workflow will:
 - Build binaries for all 8 platforms

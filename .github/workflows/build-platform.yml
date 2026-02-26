@@ -15,7 +15,7 @@ on:
         required: true
         type: string
       feature_preset:
-        description: 'Feature preset: minimal or standard'
+        description: 'Feature preset'
         required: false
         type: string
         default: 'minimal'
