@@ -87,7 +87,8 @@ docker_run() {
     local target="$2"
     local platform="$3"
     docker run --rm \
-        -v "$HOME/.cargo:/root/.cargo" \
+        -v "$HOME/.cargo/registry:/root/.cargo/registry" \
+        -v "$HOME/.cargo/git:/root/.cargo/git" \
         -v "$SCRIPT_DIR:/workspace" \
         -w /workspace \
         -e CARGO_HOME=/root/.cargo \
