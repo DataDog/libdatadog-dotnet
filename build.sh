@@ -16,6 +16,7 @@ set -e
 PLATFORM=""
 OUTPUT_DIR="output"
 PROFILE="release"
+FEATURES=""
 CLEAN=false
 
 while [[ $# -gt 0 ]]; do
@@ -23,6 +24,7 @@ while [[ $# -gt 0 ]]; do
         --platform) PLATFORM="$2"; shift 2 ;;
         --output)   OUTPUT_DIR="$2"; shift 2 ;;
         --profile)  PROFILE="$2"; shift 2 ;;
+        --features) FEATURES="$2"; shift 2 ;;
         --clean)    CLEAN=true; shift ;;
         -h|--help)
             echo "Usage: $0 --platform PLATFORM [OPTIONS]"
@@ -31,6 +33,9 @@ while [[ $# -gt 0 ]]; do
             echo "  --platform PLATFORM  Target platform / output directory suffix"
             echo "  --output DIR         Output directory (default: output)"
             echo "  --profile PROFILE    Build profile: debug or release (default: release)"
+            echo "  --features FEATURES  Comma-separated builder crate features"
+            echo "                       (default: profiling,crashtracker,data-pipeline,"
+            echo "                                symbolizer,library-config,log)"
             echo "  --clean              Remove output directory before building"
             echo "  -h, --help           Show this help"
             echo ""
@@ -62,7 +67,8 @@ VERSION=$(cat LIBDATADOG_VERSION)
 # Builder crate features compiled into the release binary.
 # These control which FFI modules are included in the output library.
 # Feature names map to flags in builder/src/bin/release.rs in libdatadog.
-FEATURES="profiling,crashtracker,data-pipeline,symbolizer,library-config,log"
+# Override via --features on the command line.
+FEATURES="${FEATURES:-profiling,crashtracker,data-pipeline,symbolizer,library-config,log}"
 
 if [[ "$CLEAN" == true ]]; then
     rm -rf "$OUTPUT_DIR"

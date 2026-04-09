@@ -13,6 +13,7 @@ param(
     [string]$Platform = "x64-windows",
     [string]$OutputDir = "output",
     [string]$Profile = "release",
+    [string]$Features = "profiling,crashtracker,data-pipeline,symbolizer,library-config,log",
     [switch]$Clean
 )
 
@@ -34,15 +35,11 @@ $Target = if ($env:CARGO_BUILD_TARGET) {
 # Read the libdatadog version.  Update LIBDATADOG_VERSION to upgrade.
 $Version = (Get-Content LIBDATADOG_VERSION).Trim()
 
-# Builder crate features compiled into the release binary.
-# These control which FFI modules are included in the output library.
-# Feature names map to flags in builder/src/bin/release.rs in libdatadog.
-$Features = "profiling,crashtracker,data-pipeline,symbolizer,library-config,log"
-
 Write-Host "Building libdatadog-dotnet" -ForegroundColor Cyan
 Write-Host "  Platform : $Platform" -ForegroundColor Gray
 Write-Host "  Target   : $Target" -ForegroundColor Gray
 Write-Host "  Profile  : $Profile" -ForegroundColor Gray
+Write-Host "  Features : $Features" -ForegroundColor Gray
 Write-Host "  Output   : $OutputDir" -ForegroundColor Gray
 Write-Host "  Version  : $Version" -ForegroundColor Gray
 

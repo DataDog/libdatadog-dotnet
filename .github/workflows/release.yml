@@ -36,6 +36,7 @@ jobs:
       contents: read
     with:
       verify_artifacts: false
+      features: 'profiling,crashtracker,data-pipeline,symbolizer,library-config,log'
 
   create-release:
     name: Create GitHub Release

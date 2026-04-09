@@ -10,6 +10,11 @@ name: Build Platform
 on:
   workflow_call:
     inputs:
+      features:
+        description: 'Comma-separated builder crate features (e.g. profiling,crashtracker,data-pipeline,symbolizer,library-config,log)'
+        required: false
+        type: string
+        default: 'profiling,crashtracker,data-pipeline,symbolizer,library-config,log'
       verify_artifacts:
         description: 'Whether to verify build artifacts after building'
         required: false
@@ -90,10 +95,10 @@ jobs:
           CARGO_BUILD_TARGET: ${{ matrix.target }}
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
-            pwsh -Command "./build.ps1 -Platform '${{ matrix.platform }}' -Clean"
+            pwsh -Command "./build.ps1 -Platform '${{ matrix.platform }}' -Features '${{ inputs.features }}' -Clean"
           else
             chmod +x build.sh
-            ./build.sh --platform "${{ matrix.platform }}" --clean
+            ./build.sh --platform "${{ matrix.platform }}" --features "${{ inputs.features }}" --clean
           fi
         shell: bash
 
