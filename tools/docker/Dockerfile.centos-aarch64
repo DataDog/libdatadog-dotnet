@@ -11,6 +11,11 @@ RUN sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo \
 RUN yum update -y \
     && yum install -y unzip
 
+# Alias the aarch64 cross-compilation tools so that the builder crate's
+# unqualified `objcopy` / `strip` calls operate on aarch64 ELF binaries.
+RUN ln -sf "$(which aarch64-linux-gnu-objcopy)" /usr/local/bin/objcopy \
+    && ln -sf "$(which aarch64-linux-gnu-strip)" /usr/local/bin/strip
+
 # Set ARM architecture defines for assembly compilation
 # Required by aws-lc-sys and other packages with ARM assembly code
 # AT_HWCAP2 is missing in CentOS 7's old glibc headers, so define it manually (value = 26 on ARM64)

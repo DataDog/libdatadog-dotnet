@@ -25,6 +25,4 @@ jobs:
     permissions:
       contents: read
     with:
-      libdatadog_version: 'main'
-      feature_preset: 'minimal'
       verify_artifacts: true

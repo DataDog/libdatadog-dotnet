@@ -4,6 +4,9 @@ Cargo.lock
 **/*.rs.bk
 *.pdb
 
+# Builder binary installed locally for macOS builds
+.builder/
+
 # Build artifacts
 output/
 dist/

@@ -1,0 +1,12 @@
+FROM ghcr.io/cross-rs/aarch64-unknown-linux-musl:main
+
+# Alias the aarch64 cross-compilation tools so that the builder crate's
+# unqualified `objcopy` / `strip` calls operate on aarch64 ELF binaries.
+# The musl image ships the GNU toolchain under the aarch64-linux-gnu- prefix.
+RUN if which aarch64-linux-musl-objcopy > /dev/null 2>&1; then \
+        ln -sf "$(which aarch64-linux-musl-objcopy)" /usr/local/bin/objcopy \
+        && ln -sf "$(which aarch64-linux-musl-strip)" /usr/local/bin/strip; \
+    else \
+        ln -sf "$(which aarch64-linux-gnu-objcopy)" /usr/local/bin/objcopy \
+        && ln -sf "$(which aarch64-linux-gnu-strip)" /usr/local/bin/strip; \
+    fi
