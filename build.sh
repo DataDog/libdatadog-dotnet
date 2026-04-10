@@ -98,8 +98,12 @@ docker_run() {
         -e BUILDER_TARGET="$target" \
         -e BUILDER_PLATFORM="$platform" \
         "$image" \
-        bash -c '
+        sh -c '
             set -e
+            export PATH="${CARGO_HOME}/bin:/usr/local/cargo/bin:${PATH}"
+            # Unset CARGO_ENCODED_RUSTFLAGS so cargo install builds the builder
+            # binary without interference from any RUSTFLAGS overrides.
+            unset CARGO_ENCODED_RUSTFLAGS
             cargo install \
                 --git https://github.com/DataDog/libdatadog \
                 --tag "v${BUILDER_VERSION}" \
@@ -110,8 +114,36 @@ docker_run() {
                 --force \
                 builder
             HOST_TRIPLE=$(rustc -vV | grep "^host:" | awk "{print \$2}")
+            # The builder crate sets RUSTFLAGS via .env("RUSTFLAGS", ...) on the
+            # cargo subprocess it spawns, which normally overrides any external
+            # RUSTFLAGS.  CARGO_ENCODED_RUSTFLAGS has higher priority in cargo
+            # and cannot be overridden by the builder that way.
+            # For musl targets, the builder'"'"'s musl.rs RUSTFLAGS is missing
+            # -C target-feature=-crt-static, which is required to build a cdylib
+            # (musl defaults to crt-static=true, disabling cdylib support).
+            # Flags are separated by \x1f (ASCII unit separator, octal \037).
+            case "${BUILDER_TARGET}" in
+                *-musl)
+                    SEP=$(printf "\037")
+                    export CARGO_ENCODED_RUSTFLAGS="-C${SEP}relocation-model=pic${SEP}-C${SEP}target-feature=-crt-static${SEP}-C${SEP}link-arg=-Wl,-soname,libdatadog_profiling.so"
+                    ;;
+            esac
+            # The builder calls cmake::Config::build() at runtime, outside of a
+            # cargo build-script context.  The cmake crate reads cargo-specific
+            # env vars that cargo normally provides automatically; since we run
+            # the builder as a standalone binary we must supply them ourselves.
+            OPT_LEVEL=3
+            DEBUG=false
+            case "${BUILDER_PROFILE}" in
+                debug) OPT_LEVEL=0; DEBUG=true ;;
+            esac
             PROFILE="${BUILDER_PROFILE}" \
+            HOST="${HOST_TRIPLE}" \
             TARGET="${HOST_TRIPLE}" \
+            OUT_DIR="/workspace/target/out" \
+            OPT_LEVEL="${OPT_LEVEL}" \
+            DEBUG="${DEBUG}" \
+            NUM_JOBS="$(nproc 2>/dev/null || echo 4)" \
             CARGO_PKG_VERSION="${BUILDER_VERSION}" \
             CARGO_TARGET_DIR="/workspace/target" \
             /tmp/builder/bin/release \
@@ -132,7 +164,9 @@ case "$TARGET" in
         docker_run libdatadog-build-linux-aarch64 "$TARGET" "${PLATFORM:-$TARGET}"
         ;;
     x86_64-unknown-linux-musl)
-        docker_run ghcr.io/cross-rs/x86_64-unknown-linux-musl:main "$TARGET" "${PLATFORM:-$TARGET}"
+        docker build -q -t libdatadog-build-linux-musl-x64 \
+            -f tools/docker/Dockerfile.musl-x64 tools/docker/
+        docker_run libdatadog-build-linux-musl-x64 "$TARGET" "${PLATFORM:-$TARGET}"
         ;;
     aarch64-unknown-linux-musl)
         docker build -q -t libdatadog-build-linux-musl-aarch64 \
