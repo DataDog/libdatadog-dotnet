@@ -9,24 +9,26 @@ RUN sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo \
     && sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
 
 RUN yum update -y \
-    && yum install -y curl unzip
+    && yum install -y unzip
 
 # Alias the aarch64 cross-compilation tools so that the builder crate's
 # unqualified `objcopy` / `strip` calls operate on aarch64 ELF binaries.
-RUN ln -sf "$(which aarch64-linux-gnu-objcopy)" /usr/local/bin/objcopy \
-    && ln -sf "$(which aarch64-linux-gnu-strip)" /usr/local/bin/strip
+RUN ln -sf /usr/bin/aarch64-linux-gnu-objcopy /usr/local/bin/objcopy \
+    && ln -sf /usr/bin/aarch64-linux-gnu-strip /usr/local/bin/strip
 
-# Set ARM architecture defines for assembly compilation
-# Required by aws-lc-sys and other packages with ARM assembly code
-# AT_HWCAP2 is missing in CentOS 7's old glibc headers, so define it manually (value = 26 on ARM64)
+# Set ARM architecture defines for assembly compilation.
+# Required by aws-lc-sys and other packages with ARM assembly code.
+# AT_HWCAP2 is missing in CentOS 7's old glibc headers, so define it manually (value = 26 on ARM64).
 ENV CFLAGS="-D__ARM_ARCH=8 -DAT_HWCAP2=26" \
     CXXFLAGS="-D__ARM_ARCH=8 -DAT_HWCAP2=26"
 
-# Install the musl-linked Rust toolchain (static binaries, run on CentOS 7)
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-    | sh -s -- -y --no-modify-path --profile minimal \
-       --default-host x86_64-unknown-linux-musl \
-    && /root/.cargo/bin/rustup target add aarch64-unknown-linux-gnu
-ENV PATH="/root/.cargo/bin:${PATH}"
-# Use the CentOS 7 aarch64 cross-compiler to link against glibc 2.17
+# gcc 4.8.5 (the cross-compiler in this image) unconditionally passes -lssp_nonshared
+# to the linker, but the library is not installed.  Create an empty stub archive in the
+# directory where gcc looks for its own runtime libraries so the link step succeeds.
+RUN gcc_dir=$(aarch64-linux-gnu-gcc -print-libgcc-file-name | xargs dirname) \
+    && ar rcs "${gcc_dir}/libssp_nonshared.a"
+
+# Use the CentOS 7 aarch64 cross-compiler to link against glibc 2.17.
+# Rust is not installed in this image; the host Rust toolchain is mounted at
+# /usr/local/cargo and /usr/local/rustup by the build script.
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc

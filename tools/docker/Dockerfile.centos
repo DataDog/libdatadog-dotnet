@@ -9,15 +9,9 @@ RUN sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo \
     && sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
 
 RUN yum update -y \
-    && yum install -y curl unzip
+    && yum install -y unzip
 
-# Install the musl-linked Rust toolchain. Its rustc/cargo binaries are
-# statically linked against musl and run on CentOS 7's glibc 2.17 without
-# the "GLIBC_2.18 not found" error that modern glibc-linked toolchains produce.
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-    | sh -s -- -y --no-modify-path --profile minimal \
-       --default-host x86_64-unknown-linux-musl \
-    && /root/.cargo/bin/rustup target add x86_64-unknown-linux-gnu
-ENV PATH="/root/.cargo/bin:${PATH}"
-# Use the CentOS 7 native gcc to link the output library against glibc 2.17
+# Use the CentOS 7 native gcc to link the output library against glibc 2.17.
+# Rust is not installed in this image; the host Rust toolchain is mounted at
+# /usr/local/cargo and /usr/local/rustup by the build script.
 ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc

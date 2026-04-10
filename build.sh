@@ -78,11 +78,95 @@ mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 PACKAGE_DIR="$OUTPUT_DIR/libdatadog-${PLATFORM:-$TARGET}"
 
-# docker_run IMAGE TARGET PLATFORM
-# Installs the builder binary inside the container and runs it.
-# The host ~/.cargo is mounted so the registry and git cache are reused
-# across runs without re-downloading.
-docker_run() {
+# docker_run_gnu IMAGE TARGET PLATFORM
+# Runs the builder inside a GNU/glibc container (CentOS 7 sysroot).
+# The host Rust toolchain is mounted read-write so that:
+#   - cargo/rustc binaries compiled against glibc 2.17 run on CentOS 7 without issues.
+#   - rustup target add can install any missing cross-compilation target components.
+#   - The Cargo registry/git caches on the host are reused across runs.
+docker_run_gnu() {
+    local image="$1"
+    local target="$2"
+    local platform="$3"
+    local cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+    local rustup_home="${RUSTUP_HOME:-$HOME/.rustup}"
+    docker run --rm \
+        -v "${cargo_home}:/usr/local/cargo" \
+        -v "${rustup_home}:/usr/local/rustup" \
+        -v "$SCRIPT_DIR:/workspace" \
+        -w /workspace \
+        -e CARGO_HOME=/usr/local/cargo \
+        -e RUSTUP_HOME=/usr/local/rustup \
+        -e BUILDER_VERSION="$VERSION" \
+        -e BUILDER_FEATURES="$FEATURES" \
+        -e BUILDER_PROFILE="$PROFILE" \
+        -e BUILDER_TARGET="$target" \
+        -e BUILDER_PLATFORM="$platform" \
+        "$image" \
+        sh -c '
+            set -e
+            export PATH="/usr/local/cargo/bin:${PATH}"
+            rustup target add "${BUILDER_TARGET}"
+            # Unset CARGO_ENCODED_RUSTFLAGS so cargo install builds the builder
+            # binary without interference from any RUSTFLAGS overrides.
+            unset CARGO_ENCODED_RUSTFLAGS
+            cargo install \
+                --git https://github.com/DataDog/libdatadog \
+                --tag "v${BUILDER_VERSION}" \
+                --bin release \
+                --root /tmp/builder \
+                --no-default-features \
+                --features "${BUILDER_FEATURES}" \
+                --force \
+                builder
+            HOST_TRIPLE=$(rustc -vV | grep "^host:" | awk "{print \$2}")
+            # BUILDER_CMAKE_TARGET: what we pass as TARGET to the builder binary.
+            # cmake::Config::build() inside the builder reads TARGET (+ HOST) to
+            # determine the C/C++ compiler for the crashtracking receiver.  For
+            # cross-compilation it must equal the actual compilation target so that
+            # cmake enters cross-compile mode and the cc crate finds the right
+            # cross-compiler.  For native builds it equals the host triple.
+            BUILDER_CMAKE_TARGET="${HOST_TRIPLE}"
+            case "${BUILDER_TARGET}" in
+                aarch64-unknown-linux-gnu)
+                    # cmake::Config::build() uses TARGET to pick the C/C++ compiler.
+                    # Setting it to the compilation target triggers cmake cross-compile
+                    # mode.  Use target-specific CC/CXX (not the generic ones) so that
+                    # x86_64 host cargo builds keep using the host compiler.
+                    BUILDER_CMAKE_TARGET="aarch64-unknown-linux-gnu"
+                    export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+                    export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+                    ;;
+            esac
+            # The builder calls cmake::Config::build() at runtime, outside of a
+            # cargo build-script context.  The cmake crate reads cargo-specific
+            # env vars that cargo normally provides automatically; since we run
+            # the builder as a standalone binary we must supply them ourselves.
+            OPT_LEVEL=3
+            DEBUG=false
+            case "${BUILDER_PROFILE}" in
+                debug) OPT_LEVEL=0; DEBUG=true ;;
+            esac
+            PROFILE="${BUILDER_PROFILE}" \
+            HOST="${HOST_TRIPLE}" \
+            TARGET="${BUILDER_CMAKE_TARGET}" \
+            OUT_DIR="/workspace/target/out" \
+            OPT_LEVEL="${OPT_LEVEL}" \
+            DEBUG="${DEBUG}" \
+            NUM_JOBS="$(nproc 2>/dev/null || echo 4)" \
+            CARGO_PKG_VERSION="${BUILDER_VERSION}" \
+            CARGO_TARGET_DIR="/workspace/target" \
+            /tmp/builder/bin/release \
+                --out "/workspace/output/libdatadog-${BUILDER_PLATFORM}" \
+                --target "${BUILDER_TARGET}"
+        '
+}
+
+# docker_run_musl IMAGE TARGET PLATFORM
+# Runs the builder inside an Alpine (musl) container.
+# Rust is provided by the rust:alpine image itself.
+# The host ~/.cargo registry and git caches are mounted to avoid re-downloading.
+docker_run_musl() {
     local image="$1"
     local target="$2"
     local platform="$3"
@@ -156,22 +240,22 @@ case "$TARGET" in
     x86_64-unknown-linux-gnu)
         docker build -q -t libdatadog-build-linux-x64 \
             -f tools/docker/Dockerfile.centos tools/docker/
-        docker_run libdatadog-build-linux-x64 "$TARGET" "${PLATFORM:-$TARGET}"
+        docker_run_gnu libdatadog-build-linux-x64 "$TARGET" "${PLATFORM:-$TARGET}"
         ;;
     aarch64-unknown-linux-gnu)
         docker build -q -t libdatadog-build-linux-aarch64 \
             -f tools/docker/Dockerfile.centos-aarch64 tools/docker/
-        docker_run libdatadog-build-linux-aarch64 "$TARGET" "${PLATFORM:-$TARGET}"
+        docker_run_gnu libdatadog-build-linux-aarch64 "$TARGET" "${PLATFORM:-$TARGET}"
         ;;
     x86_64-unknown-linux-musl)
         docker build -q -t libdatadog-build-linux-musl-x64 \
             -f tools/docker/Dockerfile.musl-x64 tools/docker/
-        docker_run libdatadog-build-linux-musl-x64 "$TARGET" "${PLATFORM:-$TARGET}"
+        docker_run_musl libdatadog-build-linux-musl-x64 "$TARGET" "${PLATFORM:-$TARGET}"
         ;;
     aarch64-unknown-linux-musl)
         docker build -q -t libdatadog-build-linux-musl-aarch64 \
             -f tools/docker/Dockerfile.musl-aarch64 tools/docker/
-        docker_run libdatadog-build-linux-musl-aarch64 "$TARGET" "${PLATFORM:-$TARGET}"
+        docker_run_musl libdatadog-build-linux-musl-aarch64 "$TARGET" "${PLATFORM:-$TARGET}"
         ;;
     *-apple-darwin)
         if ! command -v cargo &>/dev/null; then
