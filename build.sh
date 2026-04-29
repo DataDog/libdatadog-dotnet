@@ -170,15 +170,21 @@ docker_run_gnu() {
         '
 }
 
-# docker_run_musl IMAGE TARGET PLATFORM
+# docker_run_musl IMAGE TARGET PLATFORM DOCKER_PLATFORM
 # Runs the builder inside an Alpine (musl) container.
 # Rust is provided by the rust:alpine image itself.
 # The host ~/.cargo registry and git caches are mounted to avoid re-downloading.
+# DOCKER_PLATFORM (linux/amd64 or linux/arm64) selects the container arch; for
+# aarch64 we run native arm64 under QEMU (matching libdatadog's docker-bake.hcl)
+# so target = host inside the container and Alpine's gcc serves as the native
+# compiler — no cross toolchain needed.
 docker_run_musl() {
     local image="$1"
     local target="$2"
     local platform="$3"
+    local docker_platform="$4"
     docker run --rm \
+        --platform "$docker_platform" \
         -v "$HOME/.cargo/registry:/root/.cargo/registry" \
         -v "$HOME/.cargo/git:/root/.cargo/git" \
         -v "$SCRIPT_DIR:/workspace" \
@@ -193,11 +199,6 @@ docker_run_musl() {
         sh -c '
             set -e
             export PATH="${CARGO_HOME}/bin:/usr/local/cargo/bin:${PATH}"
-            # rust:alpine only ships the host musl target (x86_64).  For
-            # aarch64-unknown-linux-musl the stdlib needs to be installed
-            # explicitly; without it the FFI build fails with E0463
-            # "cannot find crate for core".
-            rustup target add "${BUILDER_TARGET}"
             # Unset CARGO_ENCODED_RUSTFLAGS so cargo install builds the builder
             # binary without interference from any RUSTFLAGS overrides.
             unset CARGO_ENCODED_RUSTFLAGS
@@ -263,12 +264,13 @@ case "$TARGET" in
     x86_64-unknown-linux-musl)
         docker build -q -t libdatadog-build-linux-musl-x64 \
             -f tools/docker/Dockerfile.musl-x64 tools/docker/
-        docker_run_musl libdatadog-build-linux-musl-x64 "$TARGET" "${PLATFORM:-$TARGET}"
+        docker_run_musl libdatadog-build-linux-musl-x64 "$TARGET" "${PLATFORM:-$TARGET}" linux/amd64
         ;;
     aarch64-unknown-linux-musl)
-        docker build -q -t libdatadog-build-linux-musl-aarch64 \
+        # Build the image for linux/arm64 so it matches the runtime arch (QEMU).
+        docker build -q --platform linux/arm64 -t libdatadog-build-linux-musl-aarch64 \
             -f tools/docker/Dockerfile.musl-aarch64 tools/docker/
-        docker_run_musl libdatadog-build-linux-musl-aarch64 "$TARGET" "${PLATFORM:-$TARGET}"
+        docker_run_musl libdatadog-build-linux-musl-aarch64 "$TARGET" "${PLATFORM:-$TARGET}" linux/arm64
         ;;
     *-apple-darwin)
         if ! command -v cargo &>/dev/null; then
