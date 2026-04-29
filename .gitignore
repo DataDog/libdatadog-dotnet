@@ -26,3 +26,5 @@ desktop.ini
 
 # Logs
 *.log
+.claude/settings.local.json
+/output-test

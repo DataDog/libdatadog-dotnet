@@ -136,6 +136,14 @@ docker_run_gnu() {
                     BUILDER_CMAKE_TARGET="aarch64-unknown-linux-gnu"
                     export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
                     export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+                    # The cross-rs aarch64 centos image sets
+                    # CMAKE_TOOLCHAIN_FILE_aarch64_unknown_linux_gnu=/opt/toolchain.cmake
+                    # in its environment.  cmake-rs auto-applies it, and that
+                    # toolchain file sets CMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY,
+                    # which scopes find_package() to the sysroot and hides
+                    # DatadogConfig.cmake written under --out.  Drop the env var;
+                    # CC_/CXX_ above are enough to drive the cross compile.
+                    unset CMAKE_TOOLCHAIN_FILE_aarch64_unknown_linux_gnu
                     ;;
             esac
             # The builder calls cmake::Config::build() at runtime, outside of a
@@ -185,6 +193,11 @@ docker_run_musl() {
         sh -c '
             set -e
             export PATH="${CARGO_HOME}/bin:/usr/local/cargo/bin:${PATH}"
+            # rust:alpine only ships the host musl target (x86_64).  For
+            # aarch64-unknown-linux-musl the stdlib needs to be installed
+            # explicitly; without it the FFI build fails with E0463
+            # "cannot find crate for core".
+            rustup target add "${BUILDER_TARGET}"
             # Unset CARGO_ENCODED_RUSTFLAGS so cargo install builds the builder
             # binary without interference from any RUSTFLAGS overrides.
             unset CARGO_ENCODED_RUSTFLAGS
@@ -276,8 +289,23 @@ case "$TARGET" in
             --force \
             builder
         HOST_TRIPLE=$(rustc -vV | grep "^host:" | awk '{print $2}')
+        # The builder calls cmake::Config::build() at runtime, outside of a
+        # cargo build-script context.  cmake-rs reads HOST/TARGET/OUT_DIR/
+        # OPT_LEVEL/DEBUG/NUM_JOBS from the env (cargo would normally provide
+        # them); we must supply them ourselves or it panics with
+        # "environment variable HOST not defined" at lib.rs:1132.
+        OPT_LEVEL=3
+        DEBUG=false
+        case "$PROFILE" in
+            debug) OPT_LEVEL=0; DEBUG=true ;;
+        esac
         PROFILE="$PROFILE" \
+        HOST="$HOST_TRIPLE" \
         TARGET="$HOST_TRIPLE" \
+        OUT_DIR="$SCRIPT_DIR/target/out" \
+        OPT_LEVEL="$OPT_LEVEL" \
+        DEBUG="$DEBUG" \
+        NUM_JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 4)" \
         CARGO_PKG_VERSION="$VERSION" \
         CARGO_TARGET_DIR="$SCRIPT_DIR/target" \
         .builder/bin/release \
