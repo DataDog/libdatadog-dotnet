@@ -155,6 +155,12 @@ docker_run_gnu() {
             case "${BUILDER_PROFILE}" in
                 debug) OPT_LEVEL=0; DEBUG=true ;;
             esac
+            # When target != host and no CMAKE_TOOLCHAIN_FILE is set, cmake-rs
+            # falls through to cc::Build to find a cross compiler.  cc reads
+            # CARGO_CFG_TARGET_* (cargo normally sets these inside build
+            # scripts); without them it panics at cmake-0.1.58:1132 with
+            # "environment variable CARGO_CFG_TARGET_OS not defined".  Both
+            # GNU targets are linux/gnu/unix/unknown — only ARCH differs.
             PROFILE="${BUILDER_PROFILE}" \
             HOST="${HOST_TRIPLE}" \
             TARGET="${BUILDER_CMAKE_TARGET}" \
@@ -164,6 +170,11 @@ docker_run_gnu() {
             NUM_JOBS="$(nproc 2>/dev/null || echo 4)" \
             CARGO_PKG_VERSION="${BUILDER_VERSION}" \
             CARGO_TARGET_DIR="/workspace/target" \
+            CARGO_CFG_TARGET_OS=linux \
+            CARGO_CFG_TARGET_ENV=gnu \
+            CARGO_CFG_TARGET_FAMILY=unix \
+            CARGO_CFG_TARGET_VENDOR=unknown \
+            CARGO_CFG_TARGET_ARCH="${BUILDER_TARGET%%-*}" \
             /tmp/builder/bin/release \
                 --out "/workspace/output/libdatadog-${BUILDER_PLATFORM}" \
                 --target "${BUILDER_TARGET}"
