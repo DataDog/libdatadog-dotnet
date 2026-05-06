@@ -6,653 +6,330 @@
 # This product includes software developed at Datadog (https://www.datadoghq.com/).
 # Copyright 2025-present Datadog, Inc.
 
-# Build script for libdatadog-dotnet
-# This script builds custom libdatadog binaries for the .NET SDK
+# Build script for libdatadog-dotnet.
+# The libdatadog version is controlled by the LIBDATADOG_VERSION file.
+# Linux builds run inside Docker (for GLIBC 2.17 / musl compatibility).
+# macOS builds run natively via cargo.
 
 set -e
 
-# Default parameters
-LIBDATADOG_VERSION="v25.0.0"
-PLATFORM="x64-linux"
+PLATFORM=""
 OUTPUT_DIR="output"
-FEATURES="minimal"
+PROFILE="release"
+FEATURES=""
 CLEAN=false
 
-# Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --version)
-            LIBDATADOG_VERSION="$2"
-            shift 2
-            ;;
-        --platform)
-            PLATFORM="$2"
-            shift 2
-            ;;
-        --output)
-            OUTPUT_DIR="$2"
-            shift 2
-            ;;
-        --features)
-            FEATURES="$2"
-            shift 2
-            ;;
-        --clean)
-            CLEAN=true
-            shift
-            ;;
+        --platform) PLATFORM="$2"; shift 2 ;;
+        --output)   OUTPUT_DIR="$2"; shift 2 ;;
+        --profile)  PROFILE="$2"; shift 2 ;;
+        --features) FEATURES="$2"; shift 2 ;;
+        --clean)    CLEAN=true; shift ;;
         -h|--help)
-            echo "Usage: $0 [OPTIONS]"
+            echo "Usage: $0 --platform PLATFORM [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  --version VERSION   Libdatadog version (default: v25.0.0)"
-            echo "  --platform PLATFORM Target platform (default: x64-linux)"
-            echo "  --output DIR        Output directory (default: output)"
-            echo "  --features PRESET   Feature preset (default: minimal)"
-            echo "  --clean             Clean build directories before building"
-            echo "  -h, --help          Show this help message"
+            echo "  --platform PLATFORM  Target platform / output directory suffix"
+            echo "  --output DIR         Output directory (default: output)"
+            echo "  --profile PROFILE    Build profile: debug or release (default: release)"
+            echo "  --features FEATURES  Comma-separated builder crate features"
+            echo "                       (default: profiling,crashtracker,data-pipeline,"
+            echo "                                symbolizer,library-config,log)"
+            echo "  --clean              Remove output directory before building"
+            echo "  -h, --help           Show this help"
             echo ""
             echo "Environment variables:"
-            echo "  CARGO_BUILD_TARGET  Cargo target for cross-compilation"
+            echo "  CARGO_BUILD_TARGET   Override the Rust target triple"
+            echo "                       (defaults to the value of --platform)"
             echo ""
             echo "Examples:"
-            echo "  $0 --version v25.0.0 --platform x64-linux"
-            echo "  CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu $0 --clean"
+            echo "  $0 --platform x86_64-unknown-linux-gnu"
+            echo "  $0 --platform aarch64-apple-darwin --output dist"
             exit 0
             ;;
-        *)
-            # Positional arguments (for backward compatibility)
-            if [ -z "$LIBDATADOG_VERSION_SET" ]; then
-                LIBDATADOG_VERSION="$1"
-                LIBDATADOG_VERSION_SET=true
-            elif [ -z "$PLATFORM_SET" ]; then
-                PLATFORM="$1"
-                PLATFORM_SET=true
-            elif [ -z "$OUTPUT_DIR_SET" ]; then
-                OUTPUT_DIR="$1"
-                OUTPUT_DIR_SET=true
-            fi
-            shift
-            ;;
+        *) echo "Unknown argument: $1" >&2; exit 1 ;;
     esac
 done
 
-# Color output functions
-print_cyan() {
-    echo -e "\033[0;36m$1\033[0m"
-}
-
-print_gray() {
-    echo -e "\033[0;90m$1\033[0m"
-}
-
-print_yellow() {
-    echo -e "\033[0;33m$1\033[0m"
-}
-
-print_red() {
-    echo -e "\033[0;31m$1\033[0m"
-}
-
-print_green() {
-    echo -e "\033[0;32m$1\033[0m"
-}
-
-print_cyan "Building libdatadog-dotnet"
-print_gray "  Libdatadog version: $LIBDATADOG_VERSION"
-print_gray "  Platform: $PLATFORM"
-print_gray "  Output directory: $OUTPUT_DIR"
-
-# Feature flags: core features needed by dd-trace-dotnet
-FEATURE_FLAGS="ddcommon-ffi,crashtracker-ffi,crashtracker-collector,demangler,symbolizer,datadog-library-config-ffi,data-pipeline-ffi,datadog-log-ffi"
-
-print_gray "  Features: $FEATURE_FLAGS"
-
-# Check prerequisites
-if ! command -v cargo &> /dev/null; then
-    print_red "Error: Required tools not found. Please install:"
-    print_red "  - Rust (https://rustup.rs/)"
+if [[ -z "$PLATFORM" && -z "$CARGO_BUILD_TARGET" ]]; then
+    echo "Error: --platform or CARGO_BUILD_TARGET is required" >&2
     exit 1
 fi
 
-if ! command -v git &> /dev/null; then
-    print_red "Error: Required tools not found. Please install:"
-    print_red "  - Git (https://git-scm.com/)"
-    exit 1
-fi
-
-# Get script directory
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+TARGET="${CARGO_BUILD_TARGET:-$PLATFORM}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Clean if requested
-if [ "$CLEAN" = true ]; then
-    print_yellow "Cleaning build directories..."
-    rm -rf libdatadog
+# Read the libdatadog version.  Update LIBDATADOG_VERSION to upgrade.
+VERSION=$(cat LIBDATADOG_VERSION)
+
+# Builder crate features compiled into the release binary.
+# These control which FFI modules are included in the output library.
+# Feature names map to flags in builder/src/bin/release.rs in libdatadog.
+# Override via --features on the command line.
+FEATURES="${FEATURES:-profiling,crashtracker,data-pipeline,symbolizer,library-config,log}"
+
+if [[ "$CLEAN" == true ]]; then
     rm -rf "$OUTPUT_DIR"
 fi
 
-# Create output directory
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
+PACKAGE_DIR="$OUTPUT_DIR/libdatadog-${PLATFORM:-$TARGET}"
 
-# Clone libdatadog if not already present
-if [ ! -d "libdatadog" ]; then
-    print_yellow "Cloning libdatadog..."
-    git clone --depth 1 --branch "$LIBDATADOG_VERSION" https://github.com/DataDog/libdatadog.git
-    if [ $? -ne 0 ]; then
-        print_red "Error: Failed to clone libdatadog. Is $LIBDATADOG_VERSION a valid tag?"
-        exit 1
-    fi
-else
-    print_gray "Checking existing libdatadog clone..."
-    cd libdatadog
-    CURRENT_TAG=$(git describe --tags --exact-match 2>/dev/null || echo "unknown")
-    cd ..
+# docker_run_gnu IMAGE TARGET PLATFORM
+# Runs the builder inside a GNU/glibc container (CentOS 7 sysroot).
+# The host Rust toolchain is mounted read-write so that:
+#   - cargo/rustc binaries compiled against glibc 2.17 run on CentOS 7 without issues.
+#   - rustup target add can install any missing cross-compilation target components.
+#   - The Cargo registry/git caches on the host are reused across runs.
+docker_run_gnu() {
+    local image="$1"
+    local target="$2"
+    local platform="$3"
+    local cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+    local rustup_home="${RUSTUP_HOME:-$HOME/.rustup}"
+    docker run --rm \
+        -v "${cargo_home}:/usr/local/cargo" \
+        -v "${rustup_home}:/usr/local/rustup" \
+        -v "$SCRIPT_DIR:/workspace" \
+        -w /workspace \
+        -e CARGO_HOME=/usr/local/cargo \
+        -e RUSTUP_HOME=/usr/local/rustup \
+        -e BUILDER_VERSION="$VERSION" \
+        -e BUILDER_FEATURES="$FEATURES" \
+        -e BUILDER_PROFILE="$PROFILE" \
+        -e BUILDER_TARGET="$target" \
+        -e BUILDER_PLATFORM="$platform" \
+        "$image" \
+        sh -c '
+            set -e
+            export PATH="/usr/local/cargo/bin:${PATH}"
+            rustup target add "${BUILDER_TARGET}"
+            # Unset CARGO_ENCODED_RUSTFLAGS so cargo install builds the builder
+            # binary without interference from any RUSTFLAGS overrides.
+            unset CARGO_ENCODED_RUSTFLAGS
+            cargo install \
+                --git https://github.com/DataDog/libdatadog \
+                --tag "v${BUILDER_VERSION}" \
+                --bin release \
+                --root /tmp/builder \
+                --no-default-features \
+                --features "${BUILDER_FEATURES}" \
+                --force \
+                builder
+            HOST_TRIPLE=$(rustc -vV | grep "^host:" | awk "{print \$2}")
+            # BUILDER_CMAKE_TARGET: what we pass as TARGET to the builder binary.
+            # cmake::Config::build() inside the builder reads TARGET (+ HOST) to
+            # determine the C/C++ compiler for the crashtracking receiver.  For
+            # cross-compilation it must equal the actual compilation target so that
+            # cmake enters cross-compile mode and the cc crate finds the right
+            # cross-compiler.  For native builds it equals the host triple.
+            BUILDER_CMAKE_TARGET="${HOST_TRIPLE}"
+            case "${BUILDER_TARGET}" in
+                aarch64-unknown-linux-gnu)
+                    # cmake::Config::build() uses TARGET to pick the C/C++ compiler.
+                    # Setting it to the compilation target triggers cmake cross-compile
+                    # mode.  Use target-specific CC/CXX (not the generic ones) so that
+                    # x86_64 host cargo builds keep using the host compiler.
+                    BUILDER_CMAKE_TARGET="aarch64-unknown-linux-gnu"
+                    export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+                    export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+                    # The cross-rs aarch64 centos image sets
+                    # CMAKE_TOOLCHAIN_FILE_aarch64_unknown_linux_gnu=/opt/toolchain.cmake
+                    # in its environment.  cmake-rs auto-applies it, and that
+                    # toolchain file sets CMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY,
+                    # which scopes find_package() to the sysroot and hides
+                    # DatadogConfig.cmake written under --out.  Drop the env var;
+                    # CC_/CXX_ above are enough to drive the cross compile.
+                    unset CMAKE_TOOLCHAIN_FILE_aarch64_unknown_linux_gnu
+                    ;;
+            esac
+            # The builder calls cmake::Config::build() at runtime, outside of a
+            # cargo build-script context.  The cmake crate reads cargo-specific
+            # env vars that cargo normally provides automatically; since we run
+            # the builder as a standalone binary we must supply them ourselves.
+            OPT_LEVEL=3
+            DEBUG=false
+            case "${BUILDER_PROFILE}" in
+                debug) OPT_LEVEL=0; DEBUG=true ;;
+            esac
+            # When target != host and no CMAKE_TOOLCHAIN_FILE is set, cmake-rs
+            # falls through to cc::Build to find a cross compiler.  cc reads
+            # CARGO_CFG_TARGET_* (cargo normally sets these inside build
+            # scripts); without them it panics at cmake-0.1.58:1132 with
+            # "environment variable CARGO_CFG_TARGET_OS not defined".  Both
+            # GNU targets are linux/gnu/unix/unknown — only ARCH differs.
+            PROFILE="${BUILDER_PROFILE}" \
+            HOST="${HOST_TRIPLE}" \
+            TARGET="${BUILDER_CMAKE_TARGET}" \
+            OUT_DIR="/workspace/target/out" \
+            OPT_LEVEL="${OPT_LEVEL}" \
+            DEBUG="${DEBUG}" \
+            NUM_JOBS="$(nproc 2>/dev/null || echo 4)" \
+            CARGO_PKG_VERSION="${BUILDER_VERSION}" \
+            CARGO_TARGET_DIR="/workspace/target" \
+            CARGO_CFG_TARGET_OS=linux \
+            CARGO_CFG_TARGET_ENV=gnu \
+            CARGO_CFG_TARGET_FAMILY=unix \
+            CARGO_CFG_TARGET_VENDOR=unknown \
+            CARGO_CFG_TARGET_ARCH="${BUILDER_TARGET%%-*}" \
+            /tmp/builder/bin/release \
+                --out "/workspace/output/libdatadog-${BUILDER_PLATFORM}" \
+                --target "${BUILDER_TARGET}"
+        '
+}
 
-    if [ "$CURRENT_TAG" != "$LIBDATADOG_VERSION" ]; then
-        print_yellow "  Existing clone is at $CURRENT_TAG, but need $LIBDATADOG_VERSION"
-        print_yellow "  Removing old clone and cloning correct version..."
-        rm -rf libdatadog
-        git clone --depth 1 --branch "$LIBDATADOG_VERSION" https://github.com/DataDog/libdatadog.git
-        if [ $? -ne 0 ]; then
-            print_red "Error: Failed to clone libdatadog. Is $LIBDATADOG_VERSION a valid tag?"
+# docker_run_musl IMAGE TARGET PLATFORM DOCKER_PLATFORM
+# Runs the builder inside an Alpine (musl) container.
+# Rust is provided by the rust:alpine image itself.
+# The host ~/.cargo registry and git caches are mounted to avoid re-downloading.
+# DOCKER_PLATFORM (linux/amd64 or linux/arm64) selects the container arch; for
+# aarch64 we run native arm64 under QEMU (matching libdatadog's docker-bake.hcl)
+# so target = host inside the container and Alpine's gcc serves as the native
+# compiler — no cross toolchain needed.
+docker_run_musl() {
+    local image="$1"
+    local target="$2"
+    local platform="$3"
+    local docker_platform="$4"
+    docker run --rm \
+        --platform "$docker_platform" \
+        -v "$HOME/.cargo/registry:/root/.cargo/registry" \
+        -v "$HOME/.cargo/git:/root/.cargo/git" \
+        -v "$SCRIPT_DIR:/workspace" \
+        -w /workspace \
+        -e CARGO_HOME=/root/.cargo \
+        -e BUILDER_VERSION="$VERSION" \
+        -e BUILDER_FEATURES="$FEATURES" \
+        -e BUILDER_PROFILE="$PROFILE" \
+        -e BUILDER_TARGET="$target" \
+        -e BUILDER_PLATFORM="$platform" \
+        "$image" \
+        sh -c '
+            set -e
+            export PATH="${CARGO_HOME}/bin:/usr/local/cargo/bin:${PATH}"
+            # Unset CARGO_ENCODED_RUSTFLAGS so cargo install builds the builder
+            # binary without interference from any RUSTFLAGS overrides.
+            unset CARGO_ENCODED_RUSTFLAGS
+            cargo install \
+                --git https://github.com/DataDog/libdatadog \
+                --tag "v${BUILDER_VERSION}" \
+                --bin release \
+                --root /tmp/builder \
+                --no-default-features \
+                --features "${BUILDER_FEATURES}" \
+                --force \
+                builder
+            HOST_TRIPLE=$(rustc -vV | grep "^host:" | awk "{print \$2}")
+            # The builder crate sets RUSTFLAGS via .env("RUSTFLAGS", ...) on the
+            # cargo subprocess it spawns, which normally overrides any external
+            # RUSTFLAGS.  CARGO_ENCODED_RUSTFLAGS has higher priority in cargo
+            # and cannot be overridden by the builder that way.
+            # For musl targets, the builder'"'"'s musl.rs RUSTFLAGS is missing
+            # -C target-feature=-crt-static, which is required to build a cdylib
+            # (musl defaults to crt-static=true, disabling cdylib support).
+            # Flags are separated by \x1f (ASCII unit separator, octal \037).
+            case "${BUILDER_TARGET}" in
+                *-musl)
+                    SEP=$(printf "\037")
+                    export CARGO_ENCODED_RUSTFLAGS="-C${SEP}relocation-model=pic${SEP}-C${SEP}target-feature=-crt-static${SEP}-C${SEP}link-arg=-Wl,-soname,libdatadog_profiling.so"
+                    ;;
+            esac
+            # The builder calls cmake::Config::build() at runtime, outside of a
+            # cargo build-script context.  The cmake crate reads cargo-specific
+            # env vars that cargo normally provides automatically; since we run
+            # the builder as a standalone binary we must supply them ourselves.
+            OPT_LEVEL=3
+            DEBUG=false
+            case "${BUILDER_PROFILE}" in
+                debug) OPT_LEVEL=0; DEBUG=true ;;
+            esac
+            PROFILE="${BUILDER_PROFILE}" \
+            HOST="${HOST_TRIPLE}" \
+            TARGET="${HOST_TRIPLE}" \
+            OUT_DIR="/workspace/target/out" \
+            OPT_LEVEL="${OPT_LEVEL}" \
+            DEBUG="${DEBUG}" \
+            NUM_JOBS="$(nproc 2>/dev/null || echo 4)" \
+            CARGO_PKG_VERSION="${BUILDER_VERSION}" \
+            CARGO_TARGET_DIR="/workspace/target" \
+            /tmp/builder/bin/release \
+                --out "/workspace/output/libdatadog-${BUILDER_PLATFORM}" \
+                --target "${BUILDER_TARGET}"
+        '
+}
+
+case "$TARGET" in
+    x86_64-unknown-linux-gnu)
+        docker build -q -t libdatadog-build-linux-x64 \
+            -f tools/docker/Dockerfile.centos tools/docker/
+        docker_run_gnu libdatadog-build-linux-x64 "$TARGET" "${PLATFORM:-$TARGET}"
+        ;;
+    aarch64-unknown-linux-gnu)
+        docker build -q -t libdatadog-build-linux-aarch64 \
+            -f tools/docker/Dockerfile.centos-aarch64 tools/docker/
+        docker_run_gnu libdatadog-build-linux-aarch64 "$TARGET" "${PLATFORM:-$TARGET}"
+        ;;
+    x86_64-unknown-linux-musl)
+        docker build -q -t libdatadog-build-linux-musl-x64 \
+            -f tools/docker/Dockerfile.musl-x64 tools/docker/
+        docker_run_musl libdatadog-build-linux-musl-x64 "$TARGET" "${PLATFORM:-$TARGET}" linux/amd64
+        ;;
+    aarch64-unknown-linux-musl)
+        # Build the image for linux/arm64 so it matches the runtime arch (QEMU).
+        docker build -q --platform linux/arm64 -t libdatadog-build-linux-musl-aarch64 \
+            -f tools/docker/Dockerfile.musl-aarch64 tools/docker/
+        docker_run_musl libdatadog-build-linux-musl-aarch64 "$TARGET" "${PLATFORM:-$TARGET}" linux/arm64
+        ;;
+    *-apple-darwin)
+        if ! command -v cargo &>/dev/null; then
+            echo "Error: cargo not found. Install Rust from https://rustup.rs/" >&2
             exit 1
         fi
-    else
-        print_gray "  Using existing clone at correct version $LIBDATADOG_VERSION"
-    fi
-fi
-
-# Build libdatadog profiling FFI
-print_yellow "Building libdatadog profiling FFI..."
-
-# Check if CARGO_BUILD_TARGET is set for cross-compilation
-CARGO_TARGET_ARG=""
-TARGET_SUBDIR=""
-USE_CROSS=false
-EXTRA_RUSTFLAGS=""
-
-if [ -n "$CARGO_BUILD_TARGET" ]; then
-    CARGO_TARGET_ARG="--target $CARGO_BUILD_TARGET"
-    TARGET_SUBDIR="$CARGO_BUILD_TARGET/"
-    print_cyan "  Target architecture: $CARGO_BUILD_TARGET"
-
-    # Set RUSTFLAGS to match original libdatadog build:
-    #   - PIC relocation model (required for shared libraries)
-    #   - SONAME so the linker records just the filename in DT_NEEDED
-    case "$CARGO_BUILD_TARGET" in
-        *-apple-darwin)
-            # macOS: only PIC (SONAME is handled via install_name_tool later)
-            EXTRA_RUSTFLAGS="-C relocation-model=pic"
-            ;;
-        *-musl)
-            # musl: PIC + SONAME + dynamic linking (musl defaults to static)
-            EXTRA_RUSTFLAGS="-C relocation-model=pic -C link-arg=-Wl,-soname,libdatadog_profiling.so -C target-feature=-crt-static"
-            print_cyan "  Enabling dynamic linking for musl target"
-            ;;
-        *-linux-gnu)
-            # glibc: PIC + SONAME
-            EXTRA_RUSTFLAGS="-C relocation-model=pic -C link-arg=-Wl,-soname,libdatadog_profiling.so"
-            ;;
-    esac
-
-    # Determine if we need to use cross for this target
-    # Use cross for Linux targets to ensure GLIBC 2.17 compatibility (via CentOS 7 Docker)
-    # Don't use cross for macOS - use native cargo cross-compilation instead
-    case "$CARGO_BUILD_TARGET" in
-        *-apple-darwin)
-            # macOS targets don't need cross - use native cargo
-            USE_CROSS=false
-            ;;
-        x86_64-unknown-linux-gnu|aarch64-unknown-linux-gnu|x86_64-unknown-linux-musl|aarch64-unknown-linux-musl)
-            if command -v cross &> /dev/null; then
-                USE_CROSS=true
-                print_cyan "  Using 'cross' for cross-compilation (GLIBC 2.17 compatibility)"
-            else
-                print_yellow "  Warning: 'cross' not found, trying native cargo (may fail)"
-            fi
-            ;;
-    esac
-fi
-
-cd libdatadog
-
-# Copy Cross.toml and Dockerfile into libdatadog for cross tool
-# Cross reads these from the directory where it's invoked
-if [ "$USE_CROSS" = true ] && [ -f "../Cross.toml" ]; then
-    print_gray "  Copying Cross.toml and Dockerfile for cross..."
-    cp -f ../Cross.toml .
-    if [ -d "../tools/docker" ]; then
-        rm -rf tools/docker
-        mkdir -p tools
-        cp -r ../tools/docker tools/
-    fi
-fi
-
-# Select cargo or cross
-CARGO_CMD="cargo"
-if [ "$USE_CROSS" = true ]; then
-    CARGO_CMD="cross"
-fi
-
-# Set RUSTFLAGS if needed (append to existing)
-if [ -n "$EXTRA_RUSTFLAGS" ]; then
-    export RUSTFLAGS="${RUSTFLAGS:-} $EXTRA_RUSTFLAGS"
-fi
-
-# Build from inside the crate directory using cargo rustc with explicit crate types
-# This matches the official libdatadog build (windows/build-artifacts.ps1)
-cd libdd-profiling-ffi
-
-# Release cdylib (shared library)
-print_gray "  Building release cdylib with $CARGO_CMD..."
-$CARGO_CMD rustc --features "$FEATURE_FLAGS" $CARGO_TARGET_ARG --release --crate-type cdylib
-if [ $? -ne 0 ]; then
-    print_red "Error: Release cdylib build failed"
-    cd ../..
-    exit 1
-fi
-
-# Release staticlib
-print_gray "  Building release staticlib with $CARGO_CMD..."
-$CARGO_CMD rustc --features "$FEATURE_FLAGS" $CARGO_TARGET_ARG --release --crate-type staticlib
-if [ $? -ne 0 ]; then
-    print_red "Error: Release staticlib build failed"
-    cd ../..
-    exit 1
-fi
-
-# Debug cdylib (shared library)
-print_gray "  Building debug cdylib with $CARGO_CMD..."
-$CARGO_CMD rustc --features "$FEATURE_FLAGS" $CARGO_TARGET_ARG --crate-type cdylib
-if [ $? -ne 0 ]; then
-    print_red "Error: Debug cdylib build failed"
-    cd ../..
-    exit 1
-fi
-
-# Debug staticlib
-print_gray "  Building debug staticlib with $CARGO_CMD..."
-$CARGO_CMD rustc --features "$FEATURE_FLAGS" $CARGO_TARGET_ARG --crate-type staticlib
-if [ $? -ne 0 ]; then
-    print_red "Error: Debug staticlib build failed"
-    cd ../..
-    exit 1
-fi
-
-cd ../..
-
-# Verify build outputs exist (with target subdirectory if cross-compiling)
-RELEASE_DIR="libdatadog/target/${TARGET_SUBDIR}release"
-DEBUG_DIR="libdatadog/target/${TARGET_SUBDIR}debug"
-
-# Check for build outputs
-# Note: musl targets may not produce .so files (cdylib) and only produce .a files (staticlib)
-if [ ! -f "$RELEASE_DIR/libdatadog_profiling_ffi.so" ] && [ ! -f "$RELEASE_DIR/libdatadog_profiling_ffi.a" ]; then
-    print_red "Error: Release build did not produce expected libraries"
-    print_red "  Expected either: $RELEASE_DIR/libdatadog_profiling_ffi.so"
-    print_red "               or: $RELEASE_DIR/libdatadog_profiling_ffi.a"
-    exit 1
-fi
-
-# Warn if only static library is available (common for musl targets)
-if [ ! -f "$RELEASE_DIR/libdatadog_profiling_ffi.so" ] && [ -f "$RELEASE_DIR/libdatadog_profiling_ffi.a" ]; then
-    print_yellow "  Note: Only static library available (typical for musl targets)"
-fi
-
-# Package the binaries
-print_yellow "Packaging binaries..."
-
-PACKAGE_DIR="$OUTPUT_DIR/libdatadog-$PLATFORM"
-mkdir -p "$PACKAGE_DIR"
-
-# Create Linux directory structure (matches original libdatadog)
-DIRS=(
-    "include/datadog"
-    "lib/pkgconfig"
-    "cmake"
-)
-
-for DIR in "${DIRS[@]}"; do
-    mkdir -p "$PACKAGE_DIR/$DIR"
-done
-
-# Copy release artifacts and rename to match original libdatadog naming
-print_gray "  Copying release artifacts..."
-
-# Determine library extension based on platform
-case "$CARGO_BUILD_TARGET" in
-    *-apple-darwin)
-        # macOS uses .dylib
-        DYNAMIC_LIB_EXT="dylib"
-        DYNAMIC_LIB_NAME="libdatadog_profiling.dylib"
+        # Unset CARGO_BUILD_TARGET so that cargo install compiles the builder
+        # binary for the host.  The builder receives --target as a CLI arg and
+        # handles cross-compilation internally (e.g. x86_64 on an arm64 runner).
+        unset CARGO_BUILD_TARGET
+        cargo install \
+            --git https://github.com/DataDog/libdatadog \
+            --tag "v${VERSION}" \
+            --bin release \
+            --root .builder \
+            --no-default-features \
+            --features "$FEATURES" \
+            --force \
+            builder
+        HOST_TRIPLE=$(rustc -vV | grep "^host:" | awk '{print $2}')
+        # The builder calls cmake::Config::build() at runtime, outside of a
+        # cargo build-script context.  cmake-rs reads HOST/TARGET/OUT_DIR/
+        # OPT_LEVEL/DEBUG/NUM_JOBS from the env (cargo would normally provide
+        # them); we must supply them ourselves or it panics with
+        # "environment variable HOST not defined" at lib.rs:1132.
+        OPT_LEVEL=3
+        DEBUG=false
+        case "$PROFILE" in
+            debug) OPT_LEVEL=0; DEBUG=true ;;
+        esac
+        PROFILE="$PROFILE" \
+        HOST="$HOST_TRIPLE" \
+        TARGET="$HOST_TRIPLE" \
+        OUT_DIR="$SCRIPT_DIR/target/out" \
+        OPT_LEVEL="$OPT_LEVEL" \
+        DEBUG="$DEBUG" \
+        NUM_JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 4)" \
+        CARGO_PKG_VERSION="$VERSION" \
+        CARGO_TARGET_DIR="$SCRIPT_DIR/target" \
+        .builder/bin/release \
+            --out "$PACKAGE_DIR" \
+            --target "$TARGET"
         ;;
     *)
-        # Linux uses .so
-        DYNAMIC_LIB_EXT="so"
-        DYNAMIC_LIB_NAME="libdatadog_profiling.so"
-        ;;
-esac
-
-# Dynamic build (shared library) - rename to libdatadog_profiling.so/.dylib
-if [ -f "$RELEASE_DIR/libdatadog_profiling_ffi.$DYNAMIC_LIB_EXT" ]; then
-    cp "$RELEASE_DIR/libdatadog_profiling_ffi.$DYNAMIC_LIB_EXT" "$PACKAGE_DIR/lib/$DYNAMIC_LIB_NAME"
-else
-    print_yellow "  Warning: Release shared library (.$DYNAMIC_LIB_EXT) not found"
-fi
-
-# Static build (static library .a) - rename to libdatadog_profiling.a
-if [ -f "$RELEASE_DIR/libdatadog_profiling_ffi.a" ]; then
-    cp "$RELEASE_DIR/libdatadog_profiling_ffi.a" "$PACKAGE_DIR/lib/libdatadog_profiling.a"
-else
-    print_yellow "  Warning: Release static library (.a) not found"
-fi
-
-# Strip libraries (matches libdatadog's exact process)
-print_gray "  Stripping binaries and extracting debug symbols..."
-
-# Determine tool prefix for cross-compilation
-OBJCOPY_CMD="objcopy"
-STRIP_CMD="strip"
-
-if [ -n "$CARGO_BUILD_TARGET" ]; then
-    case "$CARGO_BUILD_TARGET" in
-        aarch64-*-gnu)
-            # ARM64 GNU targets need aarch64-linux-gnu- prefix
-            OBJCOPY_CMD="aarch64-linux-gnu-objcopy"
-            STRIP_CMD="aarch64-linux-gnu-strip"
-            ;;
-        aarch64-*-musl)
-            # ARM64 musl targets - try specific tool first, fall back to gnu
-            if command -v aarch64-linux-musl-objcopy &> /dev/null; then
-                OBJCOPY_CMD="aarch64-linux-musl-objcopy"
-                STRIP_CMD="aarch64-linux-musl-strip"
-            else
-                OBJCOPY_CMD="aarch64-linux-gnu-objcopy"
-                STRIP_CMD="aarch64-linux-gnu-strip"
-            fi
-            ;;
-        x86_64-*-musl)
-            # x86_64 musl can use native tools
-            OBJCOPY_CMD="objcopy"
-            STRIP_CMD="strip"
-            ;;
-    esac
-fi
-
-print_gray "    Using tools: $OBJCOPY_CMD, $STRIP_CMD"
-
-# Step 1: Remove LLVM bitcode section from static library (reduces size significantly)
-if [ -f "$PACKAGE_DIR/lib/libdatadog_profiling.a" ]; then
-    case "$CARGO_BUILD_TARGET" in
-        *-apple-darwin)
-            # macOS: Remove __LLVM,__bitcode section using llvm-objcopy
-            # objcopy is not available on macOS, so we use llvm-objcopy
-            if command -v llvm-objcopy &> /dev/null; then
-                print_gray "    Removing LLVM bitcode from static library (macOS)..."
-                # Create temporary directory for extraction
-                TEMP_DIR=$(mktemp -d)
-                cd "$TEMP_DIR"
-
-                # Extract all object files from the archive
-                ar -x "$PACKAGE_DIR/lib/libdatadog_profiling.a"
-
-                # Remove __LLVM,__bitcode section from each object file
-                for obj in *.o; do
-                    llvm-objcopy --remove-section=__LLVM,__bitcode "$obj" 2>/dev/null || true
-                done
-
-                # Rebuild the archive
-                rm -f "$PACKAGE_DIR/lib/libdatadog_profiling.a"
-                ar -crs "$PACKAGE_DIR/lib/libdatadog_profiling.a" *.o
-
-                # Clean up
-                cd - > /dev/null
-                rm -rf "$TEMP_DIR"
-
-                print_gray "    LLVM bitcode removed successfully"
-            else
-                print_yellow "    Warning: llvm-objcopy not available, static library will be larger"
-            fi
-            ;;
-        *)
-            # Linux: Remove .llvmbc section using objcopy
-            if command -v $OBJCOPY_CMD &> /dev/null; then
-                print_gray "    Removing .llvmbc section from static library..."
-                $OBJCOPY_CMD --remove-section .llvmbc "$PACKAGE_DIR/lib/libdatadog_profiling.a" 2>/dev/null || {
-                    print_yellow "    Warning: Failed to remove .llvmbc section (may not be available for this target)"
-                }
-            else
-                print_yellow "    Warning: $OBJCOPY_CMD not available, cannot optimize static library"
-            fi
-            ;;
-    esac
-fi
-
-# Step 2-4: Platform-specific stripping
-if [ -f "$PACKAGE_DIR/lib/$DYNAMIC_LIB_NAME" ]; then
-    case "$CARGO_BUILD_TARGET" in
-        *-apple-darwin)
-            # macOS stripping (simpler - no separate debug file)
-            if command -v strip &> /dev/null; then
-                print_gray "    Stripping macOS library..."
-                strip -S "$PACKAGE_DIR/lib/$DYNAMIC_LIB_NAME" || {
-                    print_yellow "    Warning: Failed to strip library"
-                }
-
-                # Fix rpath using install_name_tool (macOS-specific)
-                if command -v install_name_tool &> /dev/null; then
-                    print_gray "    Fixing rpath with install_name_tool..."
-                    install_name_tool -id "@rpath/$DYNAMIC_LIB_NAME" "$PACKAGE_DIR/lib/$DYNAMIC_LIB_NAME" || {
-                        print_yellow "    Warning: Failed to fix rpath"
-                    }
-                fi
-            else
-                print_yellow "    Warning: strip not available, binary will not be stripped"
-            fi
-            ;;
-        *)
-            # Linux stripping (with separate debug file)
-            if command -v $OBJCOPY_CMD &> /dev/null && command -v $STRIP_CMD &> /dev/null; then
-                # Step 2: Extract debug symbols
-                print_gray "    Extracting debug symbols..."
-                $OBJCOPY_CMD --only-keep-debug \
-                    "$PACKAGE_DIR/lib/$DYNAMIC_LIB_NAME" \
-                    "$PACKAGE_DIR/lib/libdatadog_profiling.debug" || {
-                    print_yellow "    Warning: Failed to extract debug symbols"
-                }
-
-                # Step 3: Strip the shared library
-                # Use -S for glibc (preserves global symbols), -s for musl (strip all)
-                print_gray "    Stripping shared library..."
-                case "$CARGO_BUILD_TARGET" in
-                    *-musl)
-                        # musl uses full strip (-s)
-                        $STRIP_CMD -s "$PACKAGE_DIR/lib/$DYNAMIC_LIB_NAME" || {
-                            print_yellow "    Warning: Failed to strip library"
-                        }
-                        ;;
-                    *)
-                        # glibc uses -S (strip debug symbols but keep global symbols)
-                        $STRIP_CMD -S "$PACKAGE_DIR/lib/$DYNAMIC_LIB_NAME" || {
-                            print_yellow "    Warning: Failed to strip library"
-                        }
-                        ;;
-                esac
-
-                # Step 4: Link debug symbols to stripped binary
-                if [ -f "$PACKAGE_DIR/lib/libdatadog_profiling.debug" ]; then
-                    print_gray "    Linking debug symbols..."
-                    $OBJCOPY_CMD --add-gnu-debuglink="$PACKAGE_DIR/lib/libdatadog_profiling.debug" \
-                        "$PACKAGE_DIR/lib/$DYNAMIC_LIB_NAME" || {
-                        print_yellow "    Warning: Failed to link debug symbols"
-                    }
-                fi
-            else
-                print_yellow "    Warning: $OBJCOPY_CMD and/or $STRIP_CMD not available, binaries will not be stripped"
-                print_yellow "    This will result in much larger files than the original libdatadog releases"
-            fi
-            ;;
-    esac
-fi
-
-# Generate headers using external cbindgen (matches official libdatadog build)
-print_yellow "  Generating headers with cbindgen..."
-
-# Ensure cbindgen is installed
-if ! command -v cbindgen &> /dev/null; then
-    print_gray "    Installing cbindgen..."
-    cargo install cbindgen
-    if [ $? -ne 0 ]; then
-        print_red "Error: Failed to install cbindgen"
+        echo "Error: unsupported target '$TARGET'" >&2
+        echo "Supported targets: x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu," >&2
+        echo "                   x86_64-unknown-linux-musl, aarch64-unknown-linux-musl," >&2
+        echo "                   x86_64-apple-darwin, aarch64-apple-darwin" >&2
         exit 1
-    fi
-fi
-
-# Build dedup_headers tool (build for host, not target)
-print_gray "    Building dedup_headers tool..."
-SAVED_CARGO_BUILD_TARGET="$CARGO_BUILD_TARGET"
-unset CARGO_BUILD_TARGET
-cd libdatadog/tools
-cargo build --release --bin dedup_headers
-BUILD_RESULT=$?
-cd ../..
-export CARGO_BUILD_TARGET="$SAVED_CARGO_BUILD_TARGET"
-
-if [ $BUILD_RESULT -ne 0 ]; then
-    print_red "Error: Failed to build dedup_headers tool"
-    exit 1
-fi
-DEDUP_TOOL="libdatadog/target/release/dedup_headers"
-
-# Generate headers per FFI crate using cbindgen (matching official libdatadog build)
-HEADER_DIR="$PACKAGE_DIR/include/datadog"
-cd libdatadog
-
-# Always generate: common, profiling, crashtracker, data-pipeline, library-config
-print_gray "    Generating common.h..."
-cbindgen --crate libdd-common-ffi --config libdd-common-ffi/cbindgen.toml --output "$HEADER_DIR/common.h"
-if [ $? -ne 0 ]; then print_red "Error: cbindgen failed for common"; cd ..; exit 1; fi
-
-print_gray "    Generating profiling.h..."
-cbindgen --crate libdd-profiling-ffi --config libdd-profiling-ffi/cbindgen.toml --output "$HEADER_DIR/profiling.h"
-if [ $? -ne 0 ]; then print_red "Error: cbindgen failed for profiling"; cd ..; exit 1; fi
-
-print_gray "    Generating crashtracker.h..."
-cbindgen --crate libdd-crashtracker-ffi --config libdd-crashtracker-ffi/cbindgen.toml --output "$HEADER_DIR/crashtracker.h"
-if [ $? -ne 0 ]; then print_red "Error: cbindgen failed for crashtracker"; cd ..; exit 1; fi
-
-print_gray "    Generating data-pipeline.h..."
-cbindgen --crate libdd-data-pipeline-ffi --config libdd-data-pipeline-ffi/cbindgen.toml --output "$HEADER_DIR/data-pipeline.h"
-if [ $? -ne 0 ]; then print_red "Error: cbindgen failed for data-pipeline"; cd ..; exit 1; fi
-
-print_gray "    Generating library-config.h..."
-cbindgen --crate libdd-library-config-ffi --config libdd-library-config-ffi/cbindgen.toml --output "$HEADER_DIR/library-config.h"
-if [ $? -ne 0 ]; then print_red "Error: cbindgen failed for library-config"; cd ..; exit 1; fi
-
-# Build dedup_headers arguments: common.h first, then child headers
-HEADERS_FOR_DEDUP=("$HEADER_DIR/common.h" "$HEADER_DIR/profiling.h" "$HEADER_DIR/crashtracker.h" "$HEADER_DIR/data-pipeline.h" "$HEADER_DIR/library-config.h")
-
-# Copy blazesym.h (static header from symbolizer-ffi, not generated by cbindgen)
-if [ -f "symbolizer-ffi/src/blazesym.h" ]; then
-    print_gray "    Copying blazesym.h..."
-    cp "symbolizer-ffi/src/blazesym.h" "$HEADER_DIR/blazesym.h"
-fi
-
-cd ..
-
-# Deduplicate headers (moves shared type definitions into common.h)
-print_gray "    Running dedup_headers..."
-./$DEDUP_TOOL "${HEADERS_FOR_DEDUP[@]}"
-if [ $? -ne 0 ]; then
-    print_yellow "    Warning: dedup_headers failed. Headers may contain duplicate definitions."
-fi
-
-# Verify critical headers exist
-if [ ! -f "$PACKAGE_DIR/include/datadog/common.h" ]; then
-    print_red "Error: common.h not generated"
-    exit 1
-fi
-
-if [ ! -f "$PACKAGE_DIR/include/datadog/profiling.h" ]; then
-    print_red "Error: profiling.h not generated"
-    exit 1
-fi
-
-print_gray "  Headers generated successfully"
-
-# Create pkg-config files
-print_gray "  Creating pkg-config files..."
-cat > "$PACKAGE_DIR/lib/pkgconfig/datadog_profiling.pc" << EOF
-prefix=\${pcfiledir}/../..
-libdir=\${prefix}/lib
-includedir=\${prefix}/include
-
-Name: datadog_profiling
-Description: Datadog profiling library (shared)
-Version: ${LIBDATADOG_VERSION#v}
-Libs: -L\${libdir} -ldatadog_profiling
-Cflags: -I\${includedir}
-EOF
-
-cat > "$PACKAGE_DIR/lib/pkgconfig/datadog_profiling-static.pc" << EOF
-prefix=\${pcfiledir}/../..
-libdir=\${prefix}/lib
-includedir=\${prefix}/include
-
-Name: datadog_profiling
-Description: Datadog profiling library (static)
-Version: ${LIBDATADOG_VERSION#v}
-Libs: -L\${libdir} -ldatadog_profiling
-Cflags: -I\${includedir}
-EOF
-
-# Create CMake config file
-print_gray "  Creating CMake config..."
-
-# Determine library location for CMake based on platform
-case "$CARGO_BUILD_TARGET" in
-    *-apple-darwin)
-        CMAKE_LIB_LOCATION="\${DATADOG_LIBRARY_DIRS}/libdatadog_profiling.dylib"
-        ;;
-    *)
-        CMAKE_LIB_LOCATION="\${DATADOG_LIBRARY_DIRS}/libdatadog_profiling.so"
         ;;
 esac
-
-cat > "$PACKAGE_DIR/cmake/DatadogConfig.cmake" << EOF
-# DatadogConfig.cmake
-get_filename_component(DATADOG_CMAKE_DIR "\${CMAKE_CURRENT_LIST_FILE}" PATH)
-set(DATADOG_INCLUDE_DIRS "\${DATADOG_CMAKE_DIR}/../include")
-set(DATADOG_LIBRARY_DIRS "\${DATADOG_CMAKE_DIR}/../lib")
-set(DATADOG_LIBRARIES datadog_profiling)
-
-# Set up imported target
-add_library(Datadog::Profiling SHARED IMPORTED)
-set_target_properties(Datadog::Profiling PROPERTIES
-    INTERFACE_INCLUDE_DIRECTORIES "\${DATADOG_INCLUDE_DIRS}"
-    IMPORTED_LOCATION "$CMAKE_LIB_LOCATION"
-)
-EOF
-
-# Copy license files
-print_gray "  Copying license files..."
-# Copy LICENSE from libdatadog (Apache 2.0)
-cp libdatadog/LICENSE "$PACKAGE_DIR/" 2>/dev/null || true
-# Copy NOTICE from libdatadog
-[ -f "libdatadog/NOTICE" ] && cp libdatadog/NOTICE "$PACKAGE_DIR/" 2>/dev/null || true
-# Copy LICENSE-3rdparty.yml from libdatadog (full license texts)
-[ -f "libdatadog/LICENSE-3rdparty.yml" ] && cp libdatadog/LICENSE-3rdparty.yml "$PACKAGE_DIR/" 2>/dev/null || true
-
-print_green "Build complete!"
-print_gray "  Package directory: $PACKAGE_DIR"
-
-# Display package contents
-echo ""
-print_cyan "Package contents:"
-find "$PACKAGE_DIR" -type f | sort | while read -r file; do
-    RELATIVE_PATH="${file#$PACKAGE_DIR/}"
-    SIZE=$(du -h "$file" | cut -f1)
-    print_gray "  $RELATIVE_PATH ($SIZE)"
-done

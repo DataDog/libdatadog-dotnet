@@ -1,0 +1,11 @@
+FROM rust:alpine
+
+# Install build tools required by the libdatadog builder crate.
+# musl-dev provides musl sysroot headers/libs for native compilation.
+# cmake and make are required by the aws-lc-sys build script.
+# perl is required by the OpenSSL/AWS-LC build.
+RUN apk add --no-cache musl-dev gcc g++ make curl perl cmake
+
+# rust:alpine sets CARGO_HOME=/usr/local/cargo and adds it to PATH.
+# Our build script overrides CARGO_HOME to /root/.cargo for caching;
+# cargo binary remains at /usr/local/cargo/bin via the image PATH.

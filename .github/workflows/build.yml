@@ -25,6 +25,5 @@ jobs:
     permissions:
       contents: read
     with:
-      libdatadog_version: 'main'
-      feature_preset: 'minimal'
       verify_artifacts: true
+      features: 'profiling,crashtracker,data-pipeline,symbolizer,library-config,log'
