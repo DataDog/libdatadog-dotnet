@@ -246,6 +246,11 @@ jobs:
         env:
           RELEASE_TAG: ${{ steps.setup_release.outputs.RELEASE_TAG }}
         with:
+          # Use a PAT with bypass-rights for the repository's ref-creation
+          # ruleset.  The default GITHUB_TOKEN is blocked from creating new
+          # tag refs, which makes createRelease() fail when the tag does
+          # not yet exist.
+          github-token: ${{ secrets.RELEASE_TOKEN }}
           script: |
             const fs = require('fs');
             const path = require('path');
