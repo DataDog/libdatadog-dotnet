@@ -10,10 +10,6 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
-      libdatadog_version:
-        description: 'Libdatadog version to build (e.g., v25.0.0). Leave empty to use latest from libdatadog repository.'
-        required: false
-        default: ''
       version_increment:
         description: 'Version increment type (ignored if release_version is provided)'
         required: false
@@ -39,9 +35,8 @@ jobs:
     permissions:
       contents: read
     with:
-      libdatadog_version: ${{ github.event.inputs.libdatadog_version || 'main' }}
-      feature_preset: 'minimal'
       verify_artifacts: false
+      features: 'profiling,crashtracker,data-pipeline,symbolizer,library-config,log'
 
   create-release:
     name: Create GitHub Release
@@ -215,8 +210,7 @@ jobs:
           cat > release-notes.md << 'NOTES_EOF'
           ## Build Information
 
-          - **Libdatadog version**: ${{ github.event.inputs.libdatadog_version || 'main' }}
-          - **Feature preset**: minimal
+          - **Libdatadog version**: see `LIBDATADOG_VERSION` in this repository
 
           ## Checksums
 

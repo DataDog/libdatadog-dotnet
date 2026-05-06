@@ -10,3 +10,8 @@ RUN sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo \
 
 RUN yum update -y \
     && yum install -y unzip
+
+# Use the CentOS 7 native gcc to link the output library against glibc 2.17.
+# Rust is not installed in this image; the host Rust toolchain is mounted at
+# /usr/local/cargo and /usr/local/rustup by the build script.
+ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc
