@@ -116,8 +116,12 @@ jobs:
           output_dir="output/libdatadog-${{ matrix.platform }}"
 
           if [ "$RUNNER_OS" == "Windows" ]; then
-            if [ ! -f "$output_dir/lib/datadog_profiling.dll" ]; then
-              echo "Error: DLL not found at $output_dir/lib/datadog_profiling.dll"
+            # Windows ships the legacy layout (release/{dynamic,static},
+            # debug/{dynamic,static}) with _ffi-suffixed filenames so it
+            # matches what dd-trace-dotnet's vcpkg portfile and runtime
+            # DLL loader expect — see build.ps1 for details.
+            if [ ! -f "$output_dir/release/dynamic/datadog_profiling_ffi.dll" ]; then
+              echo "Error: DLL not found at $output_dir/release/dynamic/datadog_profiling_ffi.dll"
               exit 1
             fi
           else
