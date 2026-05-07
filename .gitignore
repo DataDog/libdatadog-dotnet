@@ -28,3 +28,4 @@ desktop.ini
 *.log
 .claude/settings.local.json
 /output-test
+libdatadog/.claude/settings.local.json
