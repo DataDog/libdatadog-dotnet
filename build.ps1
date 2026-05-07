@@ -108,7 +108,12 @@ function Invoke-Builder {
     $BuilderOut = Join-Path $OutputDir "_builder-$BuildProfile"
     if (Test-Path $BuilderOut) { Remove-Item -Path $BuilderOut -Recurse -Force }
 
-    .\.builder\bin\release.exe --out "$BuilderOut" --target "$Target"
+    # Pipe the builder's stdout to Out-Host so it stays visible in CI logs
+    # but doesn't get captured into the function's output stream alongside
+    # $BuilderOut — otherwise lines like "cargo:rerun-if-env-changed=..."
+    # would be returned to the caller and Join-Path would later try to
+    # interpret "cargo:" as a PSDrive.
+    & .\.builder\bin\release.exe --out "$BuilderOut" --target "$Target" | Out-Host
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Builder failed for profile $BuildProfile" -ForegroundColor Red
         exit 1
