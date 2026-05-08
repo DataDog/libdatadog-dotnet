@@ -9,9 +9,20 @@ RUN sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo \
     && sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
 
 RUN yum update -y \
-    && yum install -y unzip
+    && yum install -y unzip centos-release-scl autoconf automake libtool m4
 
-# Use the CentOS 7 native gcc to link the output library against glibc 2.17.
-# Rust is not installed in this image; the host Rust toolchain is mounted at
-# /usr/local/cargo and /usr/local/rustup by the build script.
+# CentOS 7's stock gcc is 4.8.5, which doesn't ship <stdatomic.h>.  Starting
+# with libdatadog v30, libdd-libunwind-sys vendors a copy of libunwind that
+# requires C11 atomics, so we pull in devtoolset-10 (gcc 10) via SCL and put
+# it first on PATH.  devtoolset still targets the system glibc (2.17), so the
+# CentOS 7 ABI baseline is preserved.
+# autoconf/automake/libtool/m4 (above) are required by libdd-libunwind-sys's
+# `autoreconf -i` step.
+RUN yum install -y devtoolset-10-gcc devtoolset-10-gcc-c++ devtoolset-10-binutils
+ENV PATH="/opt/rh/devtoolset-10/root/usr/bin:${PATH}"
+
+# Use the devtoolset-10 gcc (now first on PATH as `gcc`) to link the output
+# library against glibc 2.17.  Rust is not installed in this image; the host
+# Rust toolchain is mounted at /usr/local/cargo and /usr/local/rustup by the
+# build script.
 ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc

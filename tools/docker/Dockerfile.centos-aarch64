@@ -9,7 +9,7 @@ RUN sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo \
     && sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
 
 RUN yum update -y \
-    && yum install -y unzip
+    && yum install -y unzip autoconf automake libtool m4
 
 # Alias the aarch64 cross-compilation tools so that the builder crate's
 # unqualified `objcopy` / `strip` calls operate on aarch64 ELF binaries.
