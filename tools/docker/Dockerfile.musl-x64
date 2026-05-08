@@ -4,7 +4,9 @@ FROM rust:alpine
 # musl-dev provides musl sysroot headers/libs for native compilation.
 # cmake and make are required by the aws-lc-sys build script.
 # perl is required by the OpenSSL/AWS-LC build.
-RUN apk add --no-cache musl-dev gcc g++ make curl perl cmake
+# autoconf/automake/libtool/m4 are required by libdd-libunwind-sys (new in
+# libdatadog v30), which runs `autoreconf -i` on a vendored libunwind tree.
+RUN apk add --no-cache musl-dev gcc g++ make curl perl cmake autoconf automake libtool m4
 
 # rust:alpine sets CARGO_HOME=/usr/local/cargo and adds it to PATH.
 # Our build script overrides CARGO_HOME to /root/.cargo for caching;

@@ -79,11 +79,15 @@ OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 PACKAGE_DIR="$OUTPUT_DIR/libdatadog-${PLATFORM:-$TARGET}"
 
 # docker_run_gnu IMAGE TARGET PLATFORM
-# Runs the builder inside a GNU/glibc container (CentOS 7 sysroot).
+# Runs the builder inside an x86_64 GNU/glibc container (CentOS 7 sysroot).
 # The host Rust toolchain is mounted read-write so that:
 #   - cargo/rustc binaries compiled against glibc 2.17 run on CentOS 7 without issues.
 #   - rustup target add can install any missing cross-compilation target components.
 #   - The Cargo registry/git caches on the host are reused across runs.
+# aarch64-unknown-linux-gnu does NOT use this path — it goes through
+# docker_run_musl with --platform linux/arm64 because libdd-libunwind-sys
+# can't be cross-compiled (its build.rs runs ./configure with no cross
+# wiring), so target = host inside a QEMU-emulated arm64 container.
 docker_run_gnu() {
     local image="$1"
     local target="$2"
@@ -120,32 +124,9 @@ docker_run_gnu() {
                 --force \
                 builder
             HOST_TRIPLE=$(rustc -vV | grep "^host:" | awk "{print \$2}")
-            # BUILDER_CMAKE_TARGET: what we pass as TARGET to the builder binary.
-            # cmake::Config::build() inside the builder reads TARGET (+ HOST) to
-            # determine the C/C++ compiler for the crashtracking receiver.  For
-            # cross-compilation it must equal the actual compilation target so that
-            # cmake enters cross-compile mode and the cc crate finds the right
-            # cross-compiler.  For native builds it equals the host triple.
+            # Native build (x86_64 host = x86_64 target), so cmake::Config::build()
+            # gets TARGET = HOST and stays out of cross-compile mode.
             BUILDER_CMAKE_TARGET="${HOST_TRIPLE}"
-            case "${BUILDER_TARGET}" in
-                aarch64-unknown-linux-gnu)
-                    # cmake::Config::build() uses TARGET to pick the C/C++ compiler.
-                    # Setting it to the compilation target triggers cmake cross-compile
-                    # mode.  Use target-specific CC/CXX (not the generic ones) so that
-                    # x86_64 host cargo builds keep using the host compiler.
-                    BUILDER_CMAKE_TARGET="aarch64-unknown-linux-gnu"
-                    export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
-                    export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
-                    # The cross-rs aarch64 centos image sets
-                    # CMAKE_TOOLCHAIN_FILE_aarch64_unknown_linux_gnu=/opt/toolchain.cmake
-                    # in its environment.  cmake-rs auto-applies it, and that
-                    # toolchain file sets CMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY,
-                    # which scopes find_package() to the sysroot and hides
-                    # DatadogConfig.cmake written under --out.  Drop the env var;
-                    # CC_/CXX_ above are enough to drive the cross compile.
-                    unset CMAKE_TOOLCHAIN_FILE_aarch64_unknown_linux_gnu
-                    ;;
-            esac
             # The builder calls cmake::Config::build() at runtime, outside of a
             # cargo build-script context.  The cmake crate reads cargo-specific
             # env vars that cargo normally provides automatically; since we run
@@ -155,12 +136,6 @@ docker_run_gnu() {
             case "${BUILDER_PROFILE}" in
                 debug) OPT_LEVEL=0; DEBUG=true ;;
             esac
-            # When target != host and no CMAKE_TOOLCHAIN_FILE is set, cmake-rs
-            # falls through to cc::Build to find a cross compiler.  cc reads
-            # CARGO_CFG_TARGET_* (cargo normally sets these inside build
-            # scripts); without them it panics at cmake-0.1.58:1132 with
-            # "environment variable CARGO_CFG_TARGET_OS not defined".  Both
-            # GNU targets are linux/gnu/unix/unknown — only ARCH differs.
             PROFILE="${BUILDER_PROFILE}" \
             HOST="${HOST_TRIPLE}" \
             TARGET="${BUILDER_CMAKE_TARGET}" \
@@ -170,11 +145,6 @@ docker_run_gnu() {
             NUM_JOBS="$(nproc 2>/dev/null || echo 4)" \
             CARGO_PKG_VERSION="${BUILDER_VERSION}" \
             CARGO_TARGET_DIR="/workspace/target" \
-            CARGO_CFG_TARGET_OS=linux \
-            CARGO_CFG_TARGET_ENV=gnu \
-            CARGO_CFG_TARGET_FAMILY=unix \
-            CARGO_CFG_TARGET_VENDOR=unknown \
-            CARGO_CFG_TARGET_ARCH="${BUILDER_TARGET%%-*}" \
             /tmp/builder/bin/release \
                 --out "/workspace/output/libdatadog-${BUILDER_PLATFORM}" \
                 --target "${BUILDER_TARGET}"
@@ -182,13 +152,14 @@ docker_run_gnu() {
 }
 
 # docker_run_musl IMAGE TARGET PLATFORM DOCKER_PLATFORM
-# Runs the builder inside an Alpine (musl) container.
-# Rust is provided by the rust:alpine image itself.
-# The host ~/.cargo registry and git caches are mounted to avoid re-downloading.
-# DOCKER_PLATFORM (linux/amd64 or linux/arm64) selects the container arch; for
-# aarch64 we run native arm64 under QEMU (matching libdatadog's docker-bake.hcl)
-# so target = host inside the container and Alpine's gcc serves as the native
-# compiler — no cross toolchain needed.
+# Runs the builder inside a self-contained image whose Rust toolchain ships
+# with the image (rust:alpine for musl, our centos:7 arm64 image for
+# aarch64-gnu).  The host ~/.cargo registry and git caches are mounted to
+# avoid re-downloading.  DOCKER_PLATFORM (linux/amd64 or linux/arm64) selects
+# the container arch; for aarch64 targets we run native arm64 under QEMU
+# (matching libdatadog's docker-bake.hcl) so target = host inside the
+# container and the image's gcc serves as the native compiler — no cross
+# toolchain needed.
 docker_run_musl() {
     local image="$1"
     local target="$2"
@@ -268,9 +239,13 @@ case "$TARGET" in
         docker_run_gnu libdatadog-build-linux-x64 "$TARGET" "${PLATFORM:-$TARGET}"
         ;;
     aarch64-unknown-linux-gnu)
-        docker build -q -t libdatadog-build-linux-aarch64 \
+        # Run native arm64 under QEMU emulation (matches libdatadog's own
+        # docker-bake.hcl pattern) — libdd-libunwind-sys's build.rs runs
+        # ./configure + make without any cross-compile wiring, so it has
+        # to be built on the target arch.  Image bundles its own Rust.
+        docker build -q --platform linux/arm64 -t libdatadog-build-linux-aarch64 \
             -f tools/docker/Dockerfile.centos-aarch64 tools/docker/
-        docker_run_gnu libdatadog-build-linux-aarch64 "$TARGET" "${PLATFORM:-$TARGET}"
+        docker_run_musl libdatadog-build-linux-aarch64 "$TARGET" "${PLATFORM:-$TARGET}" linux/arm64
         ;;
     x86_64-unknown-linux-musl)
         docker build -q -t libdatadog-build-linux-musl-x64 \
