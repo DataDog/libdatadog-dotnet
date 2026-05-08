@@ -90,12 +90,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      # libdatadog itself builds aarch64 musl by running the alpine builder
-      # natively under QEMU emulation (see docker-bake.hcl in DataDog/libdatadog).
-      # We mirror that pattern so target = host inside the container and Alpine's
-      # apk-installed gcc serves as a native compiler — no cross toolchain needed.
+      # libdatadog itself builds aarch64 (gnu and musl) by running the
+      # builder natively under QEMU emulation (see docker-bake.hcl in
+      # DataDog/libdatadog).  We mirror that pattern so target = host inside
+      # the container — required since libdd-libunwind-sys's build.rs runs
+      # ./configure + make with no cross-compile wiring.
       - name: Set up QEMU
-        if: matrix.target == 'aarch64-unknown-linux-musl'
+        if: matrix.target == 'aarch64-unknown-linux-musl' || matrix.target == 'aarch64-unknown-linux-gnu'
         uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
 
       - name: Build ${{ matrix.platform }}
