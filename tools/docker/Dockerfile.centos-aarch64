@@ -1,45 +1,26 @@
-# Native arm64 CentOS 7 builder for aarch64-unknown-linux-gnu, run under
-# QEMU emulation via `--platform linux/arm64`.  Mirrors what upstream
-# libdatadog does in docker-bake.hcl ("debian-build-aarch64") and what we
-# already do for aarch64-alpine-linux-musl, because libdd-libunwind-sys (new
-# in libdatadog v30) runs `./configure && make` from its build.rs without
+# Native arm64 builder for aarch64-unknown-linux-gnu, run under QEMU
+# emulation via `--platform linux/arm64`.  Mirrors what upstream libdatadog
+# does in docker-bake.hcl ("debian-build-aarch64") and what we already do
+# for aarch64-alpine-linux-musl, because libdd-libunwind-sys (new in
+# libdatadog v30) runs `./configure && make` from its build.rs without
 # any cross-compile wiring — it must be built natively on the target arch.
-FROM centos:7
-
-# CentOS 7 is EOL; redirect to the vault.centos.org archive.
-RUN sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo \
-    && sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/*.repo \
-    && sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
-
-# centos-release-scl drops new CentOS-SCLo-*.repo files that still point at
-# mirror.centos.org / mirrorlist.centos.org — both gone since CentOS 7 EOL.
-# Re-run the same fixup so the SCL repos resolve via vault.
-# autoconf/automake/libtool/m4 are required by libdd-libunwind-sys's
-# `autoreconf -i` step.  curl is needed below to fetch rustup.
-RUN yum update -y \
-    && yum install -y unzip centos-release-scl autoconf automake libtool m4 curl \
-    && sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo \
-    && sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/*.repo \
-    && sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
-
-# CentOS 7's stock gcc is 4.8.5, which doesn't ship <stdatomic.h>.
-# devtoolset-10 (gcc 10) targets the system glibc 2.17, so the CentOS 7 ABI
-# baseline is preserved.  Force the new toolchain end-to-end via PATH +
-# explicit CC/CXX + LD_LIBRARY_PATH (see Dockerfile.centos for rationale).
-RUN yum install -y devtoolset-10-gcc devtoolset-10-gcc-c++ devtoolset-10-binutils
-
-ENV PATH="/opt/rh/devtoolset-10/root/usr/bin:${PATH}" \
-    CC=/opt/rh/devtoolset-10/root/usr/bin/gcc \
-    CXX=/opt/rh/devtoolset-10/root/usr/bin/g++ \
-    LD_LIBRARY_PATH=/opt/rh/devtoolset-10/root/usr/lib64:/opt/rh/devtoolset-10/root/usr/lib
+#
+# manylinux2014_aarch64 is the pypa-maintained image used by the Python
+# packaging community for building aarch64 wheels with maximum
+# compatibility.  It's CentOS 7 (glibc 2.17 baseline) with devtoolset-10
+# (GCC 10) and the autotools chain already installed — exactly what we
+# need.  Plain `centos:7 --platform linux/arm64` would NOT work because
+# CentOS 7's SCL `rh` collection (devtoolset-*) was never published for
+# aarch64.
+FROM quay.io/pypa/manylinux2014_aarch64
 
 # Install Rust.  This image is self-contained because the host runner is
 # x86_64 — we can't mount its cargo/rustup binaries into an arm64 container.
 # rustup's stable aarch64-unknown-linux-gnu build is linked against glibc
-# 2.17 (matches CentOS 7), so it runs natively here.
-# CARGO_HOME / RUSTUP_HOME are set to /root/.cargo / /root/.rustup so this
-# image plugs into the same docker_run_musl helper in build.sh that already
-# orchestrates aarch64 builds under QEMU (rust:alpine convention).
+# 2.17, which matches the manylinux2014 base.
+# CARGO_HOME / RUSTUP_HOME use /root paths so this image plugs into the
+# same docker_run_musl helper in build.sh that orchestrates the other
+# QEMU-emulated arm64 build (rust:alpine convention).
 ENV CARGO_HOME=/root/.cargo \
     RUSTUP_HOME=/root/.rustup
 RUN curl -fsSL https://sh.rustup.rs -o /tmp/rustup-init.sh \
@@ -47,12 +28,11 @@ RUN curl -fsSL https://sh.rustup.rs -o /tmp/rustup-init.sh \
     && rm /tmp/rustup-init.sh
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Build-time sanity check so an image build that silently shipped GCC 4.8.5
-# or a broken Rust install fails loudly here, not deep inside cargo.
+# Build-time sanity check.
 RUN gcc --version \
     && echo '#include <stdatomic.h>' | gcc -E -x c - >/dev/null \
     && rustc --version && cargo --version
 
-# Use the devtoolset-10 gcc (now first on PATH as `gcc`) to link the output
-# library against glibc 2.17.
+# Use the devtoolset-10 gcc (already first on PATH from the base image)
+# to link the output library against glibc 2.17.
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=gcc
