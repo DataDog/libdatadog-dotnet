@@ -109,16 +109,23 @@ function Invoke-Builder {
     $BuilderOut = Join-Path $OutputDir "_builder-$BuildProfile"
     if (Test-Path $BuilderOut) { Remove-Item -Path $BuilderOut -Recurse -Force }
 
-    # Pipe both stdout AND stderr to Out-Host so they stay visible in CI logs
-    # but don't get captured into the function's output stream alongside
-    # $BuilderOut — otherwise lines like "cargo:rerun-if-env-changed=..."
-    # would be returned to the caller and Join-Path would later try to
-    # interpret "cargo:" as a PSDrive.  `2>&1` is essential — without it
-    # Rust panics (which write to stderr) leave us with a silent exit-code-1
-    # failure and no diagnostic.
-    & .\.builder\bin\release.exe --out "$BuilderOut" --target "$Target" 2>&1 | Out-Host
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Builder failed for profile $BuildProfile" -ForegroundColor Red
+    # Use Start-Process with explicit file redirects rather than the
+    # pipeline — PowerShell's $ErrorActionPreference=Stop + native-command
+    # stderr handling is unreliable enough that even `2>&1 | Out-Host` can
+    # eat panic messages, leaving a silent exit-code-1 failure with zero
+    # diagnostic output.  Writing both streams to disk then dumping them
+    # is bulletproof.
+    $stdoutFile = Join-Path $OutputDir "_builder-$BuildProfile.stdout.log"
+    $stderrFile = Join-Path $OutputDir "_builder-$BuildProfile.stderr.log"
+    $proc = Start-Process -FilePath ".\.builder\bin\release.exe" `
+        -ArgumentList "--out", "$BuilderOut", "--target", "$Target" `
+        -NoNewWindow -PassThru -Wait `
+        -RedirectStandardOutput $stdoutFile `
+        -RedirectStandardError $stderrFile
+    if (Test-Path $stdoutFile) { Get-Content $stdoutFile | Write-Host }
+    if (Test-Path $stderrFile) { Get-Content $stderrFile | Write-Host -ForegroundColor Yellow }
+    if ($proc.ExitCode -ne 0) {
+        Write-Host "Builder failed for profile $BuildProfile (exit code $($proc.ExitCode))" -ForegroundColor Red
         exit 1
     }
     return $BuilderOut
