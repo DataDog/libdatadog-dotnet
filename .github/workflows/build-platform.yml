@@ -55,22 +55,27 @@ jobs:
           - platform: aarch64-alpine-linux-musl
             target: aarch64-unknown-linux-musl
             os: ubuntu-latest
-          # macOS builds
+          # macOS builds — pinned to Sonoma (macos-14) to match libdatadog's
+          # libddprof-build pipeline and keep a lower minimum-OS baseline at
+          # link time than building on Sequoia would produce.
           - platform: x86_64-apple-darwin
             target: x86_64-apple-darwin
-            os: macos-15-large
+            os: macos-14-large
           - platform: aarch64-apple-darwin
             target: aarch64-apple-darwin
-            os: macos-15
+            os: macos-14
 
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
+      # Pin to libdatadog's MSRV (see rust-version in its workspace Cargo.toml).
+      # Building with the same toolchain version libdatadog itself uses avoids
+      # subtle codegen / inlining differences between releases.
       - name: Setup Rust
         run: |
-          rustup update stable
-          rustup default stable
+          rustup install 1.84.1
+          rustup default 1.84.1
 
       - name: Add Windows target
         if: runner.os == 'Windows'

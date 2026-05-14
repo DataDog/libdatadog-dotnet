@@ -1,4 +1,4 @@
-FROM rust:alpine
+FROM rust:1.84.1-alpine
 
 # Install build tools required by the libdatadog builder crate.
 # musl-dev provides musl sysroot headers/libs for native compilation.
