@@ -72,6 +72,14 @@ $OutputDir = (Resolve-Path $OutputDir).Path
 $PackageDir = Join-Path $OutputDir "libdatadog-$Platform"
 
 # Install the builder binary once.  Each subsequent profile run reuses it.
+# Clear CARGO_BUILD_TARGET so `cargo install` compiles the builder for the
+# host (x86_64).  The workflow sets CARGO_BUILD_TARGET=i686-pc-windows-msvc
+# for the x86-windows matrix entry, which would otherwise produce a 32-bit
+# release.exe that can't load on the x86_64 runner — STATUS_ENTRYPOINT_NOT_FOUND
+# (exit code -1073741511).  The builder accepts --target as a CLI arg and
+# handles the target cross-compile internally.
+$savedTarget = $env:CARGO_BUILD_TARGET
+$env:CARGO_BUILD_TARGET = $null
 cargo install `
     --git https://github.com/DataDog/libdatadog `
     --tag "v${Version}" `
@@ -82,6 +90,7 @@ cargo install `
     --locked `
     --force `
     builder
+$env:CARGO_BUILD_TARGET = $savedTarget
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Error: cargo install failed" -ForegroundColor Red
