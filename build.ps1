@@ -79,6 +79,7 @@ cargo install `
     --root .builder `
     --no-default-features `
     --features $Features `
+    --locked `
     --force `
     builder
 

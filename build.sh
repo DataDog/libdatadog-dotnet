@@ -121,6 +121,7 @@ docker_run_gnu() {
                 --root /tmp/builder \
                 --no-default-features \
                 --features "${BUILDER_FEATURES}" \
+                --locked \
                 --force \
                 builder
             HOST_TRIPLE=$(rustc -vV | grep "^host:" | awk "{print \$2}")
@@ -191,6 +192,7 @@ docker_run_musl() {
                 --root /tmp/builder \
                 --no-default-features \
                 --features "${BUILDER_FEATURES}" \
+                --locked \
                 --force \
                 builder
             HOST_TRIPLE=$(rustc -vV | grep "^host:" | awk "{print \$2}")
@@ -274,6 +276,7 @@ case "$TARGET" in
             --root .builder \
             --no-default-features \
             --features "$FEATURES" \
+            --locked \
             --force \
             builder
         HOST_TRIPLE=$(rustc -vV | grep "^host:" | awk '{print $2}')
