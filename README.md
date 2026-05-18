@@ -1,171 +1,110 @@
 # libdatadog-dotnet
 
-Custom libdatadog binary builds for the .NET SDK (dd-trace-dotnet).
+Prebuilt [libdatadog](https://github.com/DataDog/libdatadog) binaries packaged for the .NET tracer ([dd-trace-dotnet](https://github.com/DataDog/dd-trace-dotnet)).
 
 ## Purpose
 
-This repository produces SDK-specific libdatadog binaries that include only the components required by dd-trace-dotnet. This allows the .NET team to:
-
-- Update individual libdatadog components independently
-- Reduce binary size by excluding unused components
-- Avoid blocking changes caused by monolithic libdatadog releases
-
-## Architecture
-
-This repository builds custom libdatadog binaries from the [libdatadog repository](https://github.com/DataDog/libdatadog) at a specific version, packaging only the components needed for .NET tracing:
-
-- Profiling FFI (`datadog-profiling-ffi`)
-- Core dependencies required by the profiling component
-- C/C++ header files for integration
+A thin packaging layer over upstream libdatadog. Ships only the FFI components the .NET tracer needs — fewer features → smaller binaries → independent release cadence from upstream.
 
 ## Building
 
 ### Prerequisites
 
-- Rust 1.84.1 or newer
-- cargo
-- git
-- PowerShell (Windows) or Bash (Linux/macOS)
+- Rust 1.84.1 or newer (CI pins to 1.84.1 to match libdatadog's MSRV)
+- Git
+- PowerShell on Windows; Bash + Docker (with buildx and QEMU for aarch64 Linux builds) elsewhere
 
-### Local Build
+### Local build
 
-**Windows:**
-```powershell
-# Build Windows x64 binaries
-./build.ps1
-
-# Build with specific libdatadog version
-./build.ps1 -LibdatadogVersion v25.0.0
-
-# Build with different feature preset
-./build.ps1 -LibdatadogVersion v25.0.0
-
-# Clean build
-./build.ps1 -Clean
-```
-
-**Linux/macOS:**
 ```bash
-# Build binaries
-./build.sh
+# Linux GNU x64
+./build.sh --platform x86_64-unknown-linux-gnu --clean
 
-# Build with specific libdatadog version
-./build.sh --version v25.0.0
+# macOS arm64
+./build.sh --platform aarch64-apple-darwin --clean
 
-# Build with different feature preset
-./build.sh --version v25.0.0
-
-# Clean build
-./build.sh --clean
+# Windows
+./build.ps1 -Platform x64-windows -Clean
 ```
 
-The build artifacts will be placed in the `output/` directory.
+Output lands in `output/libdatadog-<platform>/`.
+
+To upgrade the upstream libdatadog version, edit the `LIBDATADOG_VERSION` file (e.g. `30.0.0` — no `v` prefix). The version must match what `dd-trace-dotnet`'s `build/cmake/FindLibdatadog.cmake` targets; otherwise the tracer's C++ build fails on missing identifiers.
 
 ### Features
 
-The build includes the core features required by dd-trace-dotnet:
+Built with the comma-separated feature set the .NET tracer needs (see `build.ps1` / workflow inputs):
 
-- Profiling FFI, crashtracker, symbolizer, demangler, library-config, data-pipeline, log
+```
+profiling,crashtracker,data-pipeline,symbolizer,library-config,log
+```
 
-### What the Build Does
+These are the builder-crate feature flags upstream libdatadog exposes — names map to the underlying cargo features inside libdatadog. Upstream's default release additionally enables `telemetry`, `ddsketch`, and `ffe`; we omit them, saving ~5–10% binary size.
 
-1. Clones the libdatadog repository at the specified version
-2. Builds the profiling FFI crate using `cargo rustc --crate-type cdylib/staticlib` (release + debug)
-3. Generates C/C++ headers using external `cbindgen` CLI per crate
-4. Deduplicates headers using libdatadog's `dedup_headers` tool
-5. Strips binaries and extracts debug symbols (Linux/macOS)
-6. Packages binaries, headers, and license files for dd-trace-dotnet
+## How It Works
 
-### Alignment with Official libdatadog Build
+We install libdatadog's own `release` binary (from its `builder` crate) at the pinned tag, then let it produce the package:
 
-The build process is designed to match the official libdatadog compilation as closely as possible, differing only where needed for .NET-specific requirements:
+```
+cargo install \
+    --git https://github.com/DataDog/libdatadog \
+    --tag "v${LIBDATADOG_VERSION}" \
+    --bin release \
+    --no-default-features \
+    --features "<feature-list>" \
+    builder
+release --out <package-dir> --target <triple>
+```
 
-- **Build command**: Uses `cargo rustc --crate-type` with explicit crate types, same as `windows/build-artifacts.ps1`
-- **RUSTFLAGS**: Identical per platform (PIC, crt-static on Windows, SONAME on Linux)
-- **Header generation**: External `cbindgen` CLI per FFI crate with `dedup_headers`, same as the official scripts
-- **Library stripping**: Same objcopy/strip pipeline (debug symbol extraction, LLVM bitcode removal)
-- **Release profile**: Same `opt-level = "s"`, `lto = true`, `codegen-units = 1` from the workspace Cargo.toml
+The builder handles the FFI cargo build, header generation (cbindgen + dedup), library stripping, and packaging.
 
-The build includes only the features dd-trace-dotnet needs, reducing binary size compared to the official release.
+**Windows quirk**: the builder produces a flat `lib/datadog_profiling.{dll,lib,pdb}` layout, but dd-trace-dotnet's vcpkg portfile expects the legacy `release/{dynamic,static}` + `debug/{dynamic,static}` tree with `_ffi`-suffixed filenames. `build.ps1` runs the builder twice (release + debug) and reassembles that layout from cargo's raw `target/` output.
 
-### Linux Builds and GLIBC Compatibility
+## GLIBC Compatibility
 
-Linux builds (x86_64 and ARM64) are compiled with **GLIBC 2.17 compatibility** to support CentOS 7 and other older distributions. This is achieved using:
+Linux GNU builds target **GLIBC 2.17** (CentOS 7 baseline) so the resulting binaries run on older enterprise distros:
 
-- **cross-rs** tool with custom CentOS 7-based Docker images
-- Custom Dockerfiles in `tools/docker/` (Dockerfile.centos for x86_64, Dockerfile.centos-aarch64 for ARM64)
-- `Cross.toml` configuration for target-specific Docker images
+- `x86_64-unknown-linux-gnu` — built in a CentOS 7 container (`cross-rs/x86_64-unknown-linux-gnu:main-centos`) with devtoolset-10 GCC.
+- `aarch64-unknown-linux-gnu` — built natively under QEMU `linux/arm64` in `quay.io/pypa/manylinux2014_aarch64` (the only CentOS 7 aarch64 image with devtoolset). aarch64-musl follows the same QEMU pattern using `rust:1.84.1-alpine`.
 
-The binaries include proper SONAME (`libdatadog_profiling.so`) for dynamic linking and use position-independent code (PIC) for shared library compatibility.
-
-**Note:** ARM64 builds require special compilation flags (`-D__ARM_ARCH=8 -DAT_HWCAP2=26`) to work with CentOS 7's older glibc headers.
+macOS and Windows builds run natively on the appropriate GitHub-hosted runner.
 
 ## Release Process
 
-Releases are automated via GitHub Actions. Go to [Actions → Release](https://github.com/DataDog/libdatadog-dotnet/actions/workflows/release.yml) and click "Run workflow".
+Manual dispatch: **Actions → Release → Run workflow**. The workflow builds all 8 platforms, creates a git tag, and publishes a GitHub release with checksums.
 
-**Prerequisites:** The repository requires a `RELEASE_TOKEN` secret (Personal Access Token with repo permissions) to create tags due to repository protection rules.
+**Prerequisites**: a `RELEASE_TOKEN` secret (a fine-grained PAT with Contents: Read+Write, issued from an account on the repo's ruleset bypass list). The default `GITHUB_TOKEN` is blocked from creating tag refs.
 
-### Build Without Release (Testing)
+**Inputs**:
 
-To build and test without creating a release, use the **Build workflow** instead:
-- Go to **Actions → Build**
-- Triggered automatically on PRs and pushes to main
-- Can also be triggered manually via workflow_dispatch
+| Input | Default | Notes |
+|---|---|---|
+| `version_increment` | `patch` | `patch` / `minor` / `major` — ignored if `release_version` is set |
+| `release_version` | _(empty)_ | Manual override, e.g. `v1.4.0` |
 
-### Create a Release
+The upstream libdatadog version isn't a workflow input — it's pinned in the `LIBDATADOG_VERSION` file at the time of the release commit.
 
-The Release workflow builds binaries and creates a GitHub release:
+For CI runs without publishing a release, use the **Build** workflow (auto-triggered on every PR and push to `main`).
 
-**Parameters:**
-- **Libdatadog version**: Leave empty for latest code, or specify a version (e.g., `v26.0.0`)
-- **Version increment**: Choose how to bump the version (default: `patch`)
-  - `patch`: v1.0.9 → v1.0.10 (bug fixes)
-  - `minor`: v1.0.9 → v1.1.0 (new features)
-  - `major`: v1.0.9 → v2.0.0 (breaking changes)
-- **Release version** (optional): Manually specify version (e.g., `v1.2.0`) to override auto-increment
-- **Feature preset**: `minimal` (core features for dd-trace-dotnet)
+## Release Artifacts
 
-The workflow will:
-- Build binaries for all 8 platforms
-- Auto-increment version (or use manual override)
-- Create a git tag
-- Create a GitHub release with artifacts and checksums
+Published as GitHub Release assets:
 
-**Note:** This workflow always creates a release. For testing builds without releasing, use the Build workflow.
+| Platform | Asset |
+|---|---|
+| Windows x64 | `libdatadog-x64-windows.zip` |
+| Windows x86 | `libdatadog-x86-windows.zip` |
+| Linux x64 (glibc) | `libdatadog-x86_64-unknown-linux-gnu.tar.gz` |
+| Linux aarch64 (glibc) | `libdatadog-aarch64-unknown-linux-gnu.tar.gz` |
+| Linux x64 (musl/Alpine) | `libdatadog-x86_64-alpine-linux-musl.tar.gz` |
+| Linux aarch64 (musl/Alpine) | `libdatadog-aarch64-alpine-linux-musl.tar.gz` |
+| macOS x64 (Intel) | `libdatadog-x86_64-apple-darwin.tar.gz` |
+| macOS arm64 (Apple Silicon) | `libdatadog-aarch64-apple-darwin.tar.gz` |
 
-## Releases
+Each release body includes SHA256 + SHA512 checksums.
 
-Release artifacts are published as GitHub Release assets for all supported platforms:
-
-**Windows:**
-- `libdatadog-x64-windows.zip` - Windows x64 binaries
-- `libdatadog-x86-windows.zip` - Windows x86 binaries
-
-**Linux (glibc):**
-- `libdatadog-x86_64-unknown-linux-gnu.tar.gz` - Linux x64
-- `libdatadog-aarch64-unknown-linux-gnu.tar.gz` - Linux ARM64
-
-**Linux (musl/Alpine):**
-- `libdatadog-x86_64-alpine-linux-musl.tar.gz` - Linux x64
-- `libdatadog-aarch64-alpine-linux-musl.tar.gz` - Linux ARM64
-
-**macOS:**
-- `libdatadog-x86_64-apple-darwin.tar.gz` - macOS x64 (Intel)
-- `libdatadog-aarch64-apple-darwin.tar.gz` - macOS ARM64 (Apple Silicon)
-
-## Component Versions
-
-The libdatadog version is automatically determined at build time:
-- **Manual trigger with empty version:** Uses the latest code from the `main` branch (not the latest release)
-- **Manual trigger with specific version:** Uses the specified version tag or branch (e.g., `v26.0.0` or `main`)
-
-This allows you to build and release the latest libdatadog code anytime, even if libdatadog hasn't released a new version yet.
-
-For security vulnerabilities, please see our [Security Policy](SECURITY.md).
+For security vulnerabilities, see [SECURITY.md](SECURITY.md).
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE) file.
-
-Packages include `LICENSE-3rdparty.yml` from libdatadog with full third-party license texts.
+Apache 2.0 — see [LICENSE](LICENSE). Packages bundle the upstream `LICENSE-3rdparty.yml` with full third-party license texts.

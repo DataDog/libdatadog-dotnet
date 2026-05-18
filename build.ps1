@@ -72,6 +72,14 @@ $OutputDir = (Resolve-Path $OutputDir).Path
 $PackageDir = Join-Path $OutputDir "libdatadog-$Platform"
 
 # Install the builder binary once.  Each subsequent profile run reuses it.
+# Clear CARGO_BUILD_TARGET so `cargo install` compiles the builder for the
+# host (x86_64).  The workflow sets CARGO_BUILD_TARGET=i686-pc-windows-msvc
+# for the x86-windows matrix entry, which would otherwise produce a 32-bit
+# release.exe that can't load on the x86_64 runner — STATUS_ENTRYPOINT_NOT_FOUND
+# (exit code -1073741511).  The builder accepts --target as a CLI arg and
+# handles the target cross-compile internally.
+$savedTarget = $env:CARGO_BUILD_TARGET
+$env:CARGO_BUILD_TARGET = $null
 cargo install `
     --git https://github.com/DataDog/libdatadog `
     --tag "v${Version}" `
@@ -79,8 +87,10 @@ cargo install `
     --root .builder `
     --no-default-features `
     --features $Features `
+    --locked `
     --force `
     builder
+$env:CARGO_BUILD_TARGET = $savedTarget
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Error: cargo install failed" -ForegroundColor Red
@@ -108,14 +118,23 @@ function Invoke-Builder {
     $BuilderOut = Join-Path $OutputDir "_builder-$BuildProfile"
     if (Test-Path $BuilderOut) { Remove-Item -Path $BuilderOut -Recurse -Force }
 
-    # Pipe the builder's stdout to Out-Host so it stays visible in CI logs
-    # but doesn't get captured into the function's output stream alongside
-    # $BuilderOut — otherwise lines like "cargo:rerun-if-env-changed=..."
-    # would be returned to the caller and Join-Path would later try to
-    # interpret "cargo:" as a PSDrive.
-    & .\.builder\bin\release.exe --out "$BuilderOut" --target "$Target" | Out-Host
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Builder failed for profile $BuildProfile" -ForegroundColor Red
+    # Use Start-Process with explicit file redirects rather than the
+    # pipeline — PowerShell's $ErrorActionPreference=Stop + native-command
+    # stderr handling is unreliable enough that even `2>&1 | Out-Host` can
+    # eat panic messages, leaving a silent exit-code-1 failure with zero
+    # diagnostic output.  Writing both streams to disk then dumping them
+    # is bulletproof.
+    $stdoutFile = Join-Path $OutputDir "_builder-$BuildProfile.stdout.log"
+    $stderrFile = Join-Path $OutputDir "_builder-$BuildProfile.stderr.log"
+    $proc = Start-Process -FilePath ".\.builder\bin\release.exe" `
+        -ArgumentList "--out", "$BuilderOut", "--target", "$Target" `
+        -NoNewWindow -PassThru -Wait `
+        -RedirectStandardOutput $stdoutFile `
+        -RedirectStandardError $stderrFile
+    if (Test-Path $stdoutFile) { Get-Content $stdoutFile | Write-Host }
+    if (Test-Path $stderrFile) { Get-Content $stderrFile | Write-Host -ForegroundColor Yellow }
+    if ($proc.ExitCode -ne 0) {
+        Write-Host "Builder failed for profile $BuildProfile (exit code $($proc.ExitCode))" -ForegroundColor Red
         exit 1
     }
     return $BuilderOut
