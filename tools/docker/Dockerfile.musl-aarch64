@@ -1,9 +1,27 @@
-FROM rust:1.84.1-alpine
+FROM alpine:3.18
+
+# Pinned to alpine:3.18 to match dd-trace-dotnet's aarch64 musl build environment
+# (tracer/build/_build/docker/alpine.build.arm64.dockerfile). No prebuilt
+# rust:alpine3.18 image exists since Alpine 3.18 reached EOL, so Rust is installed
+# via rustup below. dd-trace-dotnet's NativeValidation enforces an alpine 3.14
+# symbol floor (musl 1.2.2 + libgcc 10.3.1); 3.18 is the closest still-installable
+# Alpine that matches its aarch64 build host.
 
 # Install build tools required by the libdatadog builder crate.
 # musl-dev provides musl sysroot headers/libs for native compilation.
 # cmake and make are required by the aws-lc-sys build script.
 # perl is required by the OpenSSL/AWS-LC build.
-# autoconf/automake/libtool/m4 are required by libdd-libunwind-sys (new in
-# libdatadog v30), which runs `autoreconf -i` on a vendored libunwind tree.
-RUN apk add --no-cache musl-dev gcc g++ make curl perl cmake autoconf automake libtool m4
+# ca-certificates is required for rustup to fetch over HTTPS.
+RUN apk add --no-cache musl-dev gcc g++ make curl perl cmake ca-certificates
+
+# Match rust:alpine's layout so build.sh's PATH override (which prepends
+# /usr/local/cargo/bin) keeps working unchanged.
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+
+ARG RUST_VERSION=1.95.0
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- --default-toolchain ${RUST_VERSION} --profile minimal -y --no-modify-path \
+ && rustc --version \
+ && cargo --version
