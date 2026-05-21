@@ -20,7 +20,7 @@ ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:$PATH
 
-ARG RUST_VERSION=1.95.0
+ARG RUST_VERSION=1.87.0
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
     | sh -s -- --default-toolchain ${RUST_VERSION} --profile minimal -y --no-modify-path \
  && rustc --version \

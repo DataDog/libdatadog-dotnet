@@ -76,7 +76,7 @@ So `build.ps1`:
 
 5. **cmake-rs needs cargo build-script env on macOS**: the builder calls `cmake::Config::build()` for the crashtracker C++ receiver outside a cargo build-script context. cmake-rs / cc-rs read `HOST` / `OUT_DIR` / `OPT_LEVEL` / `DEBUG` / `NUM_JOBS`. The macOS branch of `build.sh` sets all of them; missing any one panics with `environment variable 'X' not defined`. (Windows doesn't hit this — `BUILD_CRASHTRACKER = false` in the builder's `arch/windows.rs`.)
 
-6. **Toolchain pinned to upstream libdatadog's**: Rust `1.84.1` (matches libdatadog's workspace `rust-version`) and macOS runners `macos-14` / `macos-14-large` (Sonoma, matches libdatadog's libddprof-build pipeline). When upstream libdatadog bumps its MSRV or its macOS build version, update both here — building with a different toolchain than upstream can introduce subtle codegen / ABI differences. The pin lives in: `build-platform.yml` (Setup Rust step + matrix `os:` fields), `Dockerfile.centos-aarch64` (rustup-init `--default-toolchain`), and `Dockerfile.musl-*` (`FROM rust:<version>-alpine`).
+6. **Toolchain pinned to upstream libdatadog's**: Rust `1.87.0` (matches libdatadog's workspace `rust-version`) and macOS runners `macos-14` / `macos-14-large` (Sonoma, matches libdatadog's libddprof-build pipeline). When upstream libdatadog bumps its MSRV or its macOS build version, update both here — building with a different toolchain than upstream can introduce subtle codegen / ABI differences. The pin lives in: `build-platform.yml` (Setup Rust step + matrix `os:` fields), `Dockerfile.centos-aarch64` (rustup-init `--default-toolchain`), and `Dockerfile.musl-*` (`ARG RUST_VERSION` consumed by the rustup install).
 
 7. **Release workflow needs `RELEASE_TOKEN`**: the repo's ref-creation ruleset blocks `GITHUB_TOKEN` from creating new tags, so `actions/github-script` in `release.yml` uses `github-token: ${{ secrets.RELEASE_TOKEN }}` (a fine-grained PAT with Contents: Read+Write, from a user on the ruleset's bypass list). Sometimes this secret needs rotating — symptom is the release job failing with `Cannot create ref due to creations being restricted` followed by `Published releases must have a valid tag`.
 
@@ -90,8 +90,8 @@ libdatadog-dotnet/
 ├── tools/docker/
 │   ├── Dockerfile.centos           # x86_64-gnu: cross-rs centos7 + devtoolset-10
 │   ├── Dockerfile.centos-aarch64   # aarch64-gnu: manylinux2014_aarch64 + rustup
-│   ├── Dockerfile.musl-x64         # x86_64-musl: rust:1.84.1-alpine + autotools
-│   └── Dockerfile.musl-aarch64     # aarch64-musl: rust:1.84.1-alpine + autotools
+│   ├── Dockerfile.musl-x64         # x86_64-musl: alpine:3.17 + rustup
+│   └── Dockerfile.musl-aarch64     # aarch64-musl: alpine:3.18 + rustup
 └── .github/workflows/
     ├── build-platform.yml          # Reusable matrix workflow (8 platforms)
     ├── build.yml                   # CI on PRs + push to main

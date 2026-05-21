@@ -74,8 +74,8 @@ jobs:
       # subtle codegen / inlining differences between releases.
       - name: Setup Rust
         run: |
-          rustup install 1.84.1
-          rustup default 1.84.1
+          rustup install 1.87.0
+          rustup default 1.87.0
 
       - name: Add Windows target
         if: runner.os == 'Windows'
