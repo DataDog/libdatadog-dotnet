@@ -152,15 +152,11 @@ docker_run_gnu() {
         '
 }
 
-# docker_run_musl IMAGE TARGET PLATFORM DOCKER_PLATFORM
-# Runs the builder inside a self-contained image whose Rust toolchain ships
-# with the image (rust:alpine for musl, our centos:7 arm64 image for
-# aarch64-gnu).  The host ~/.cargo registry and git caches are mounted to
-# avoid re-downloading.  DOCKER_PLATFORM (linux/amd64 or linux/arm64) selects
-# the container arch; for aarch64 targets we run native arm64 under QEMU
-# (matching libdatadog's docker-bake.hcl) so target = host inside the
-# container and the image's gcc serves as the native compiler — no cross
-# toolchain needed.
+# docker_run_musl IMAGE TARGET PLATFORM
+# Runs the builder inside an Alpine (musl) container.
+# Rust is installed via rustup inside the image (see tools/docker/Dockerfile.musl-*);
+# Alpine is pinned to 3.17 (x64) / 3.18 (aarch64) to match dd-trace-dotnet's build env.
+# The host ~/.cargo registry and git caches are mounted to avoid re-downloading.
 docker_run_musl() {
     local image="$1"
     local target="$2"

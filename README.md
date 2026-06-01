@@ -10,7 +10,7 @@ A thin packaging layer over upstream libdatadog. Ships only the FFI components t
 
 ### Prerequisites
 
-- Rust 1.84.1 or newer (CI pins to 1.84.1 to match libdatadog's MSRV)
+- Rust 1.87.0 or newer (CI pins to 1.87.0 to match libdatadog's MSRV)
 - Git
 - PowerShell on Windows; Bash + Docker (with buildx and QEMU for aarch64 Linux builds) elsewhere
 
@@ -65,7 +65,7 @@ The builder handles the FFI cargo build, header generation (cbindgen + dedup), l
 Linux GNU builds target **GLIBC 2.17** (CentOS 7 baseline) so the resulting binaries run on older enterprise distros:
 
 - `x86_64-unknown-linux-gnu` — built in a CentOS 7 container (`cross-rs/x86_64-unknown-linux-gnu:main-centos`) with devtoolset-10 GCC.
-- `aarch64-unknown-linux-gnu` — built natively under QEMU `linux/arm64` in `quay.io/pypa/manylinux2014_aarch64` (the only CentOS 7 aarch64 image with devtoolset). aarch64-musl follows the same QEMU pattern using `rust:1.84.1-alpine`.
+- `aarch64-unknown-linux-gnu` — built natively under QEMU `linux/arm64` in `quay.io/pypa/manylinux2014_aarch64` (the only CentOS 7 aarch64 image with devtoolset). aarch64-musl follows the same QEMU pattern using `alpine:3.18` + rustup.
 
 macOS and Windows builds run natively on the appropriate GitHub-hosted runner.
 
