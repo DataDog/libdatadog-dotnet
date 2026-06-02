@@ -26,4 +26,4 @@ jobs:
       contents: read
     with:
       verify_artifacts: true
-      features: 'profiling,crashtracker,data-pipeline,symbolizer,library-config,log'
+      features: 'profiling,crashtracker,symbolizer,library-config'

@@ -34,8 +34,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --output DIR         Output directory (default: output)"
             echo "  --profile PROFILE    Build profile: debug or release (default: release)"
             echo "  --features FEATURES  Comma-separated builder crate features"
-            echo "                       (default: profiling,crashtracker,data-pipeline,"
-            echo "                                symbolizer,library-config,log)"
+            echo "                       (default: profiling,crashtracker,"
+            echo "                                symbolizer,library-config)"
             echo "  --clean              Remove output directory before building"
             echo "  -h, --help           Show this help"
             echo ""
@@ -68,7 +68,7 @@ VERSION=$(cat LIBDATADOG_VERSION)
 # These control which FFI modules are included in the output library.
 # Feature names map to flags in builder/src/bin/release.rs in libdatadog.
 # Override via --features on the command line.
-FEATURES="${FEATURES:-profiling,crashtracker,data-pipeline,symbolizer,library-config,log}"
+FEATURES="${FEATURES:-profiling,crashtracker,symbolizer,library-config}"
 
 if [[ "$CLEAN" == true ]]; then
     rm -rf "$OUTPUT_DIR"
