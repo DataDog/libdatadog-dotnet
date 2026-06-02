@@ -28,7 +28,7 @@
 param(
     [string]$Platform = "x64-windows",
     [string]$OutputDir = "output",
-    [string]$Features = "profiling,crashtracker,library-config",
+    [string]$Features = "profiling,crashtracker,symbolizer,library-config",
     [switch]$Clean
 )
 
