@@ -156,7 +156,7 @@ Copy-Item -Path (Join-Path $ReleaseOut "include") -Destination $PackageDir -Recu
 if (Test-Path (Join-Path $ReleaseOut "cmake")) {
     Copy-Item -Path (Join-Path $ReleaseOut "cmake") -Destination $PackageDir -Recurse
 }
-foreach ($f in @("LICENSE", "NOTICE", "LICENSE-3rdparty.yml")) {
+foreach ($f in @("LICENSE", "NOTICE", "LICENSE-3rdparty.csv")) {
     $src = Join-Path $ReleaseOut $f
     if (Test-Path $src) { Copy-Item -Path $src -Destination $PackageDir }
 }

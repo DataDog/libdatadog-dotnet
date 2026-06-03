@@ -55,7 +55,7 @@ release/dynamic/datadog_profiling_ffi.{dll,lib,pdb}   (DLL + import library)
 release/static/datadog_profiling_ffi.lib              (static archive)
 debug/dynamic/datadog_profiling_ffi.{dll,lib,pdb}
 debug/static/datadog_profiling_ffi.lib
-include/datadog/…  cmake/DatadogConfig.cmake  LICENSE  NOTICE
+include/datadog/…  cmake/DatadogConfig.cmake  LICENSE  NOTICE  LICENSE-3rdparty.csv
 ```
 
 So `build.ps1`:

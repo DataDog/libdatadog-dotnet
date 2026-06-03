@@ -107,4 +107,4 @@ For security vulnerabilities, see [SECURITY.md](SECURITY.md).
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE). Packages bundle the upstream `LICENSE-3rdparty.yml` with full third-party license texts.
+Apache 2.0 — see [LICENSE](LICENSE). Packages bundle the upstream `LICENSE-3rdparty.csv` with full third-party license texts.
