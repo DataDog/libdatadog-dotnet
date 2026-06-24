@@ -29,7 +29,7 @@ A thin packaging layer over upstream libdatadog. Ships only the FFI components t
 
 Output lands in `output/libdatadog-<platform>/`.
 
-To upgrade the upstream libdatadog version, edit the `LIBDATADOG_VERSION` file (e.g. `30.0.0` — no `v` prefix). The version must match what `dd-trace-dotnet`'s `build/cmake/FindLibdatadog.cmake` targets; otherwise the tracer's C++ build fails on missing identifiers.
+To upgrade the upstream libdatadog version, edit the `LIBDATADOG_VERSION` file (e.g. `32.0.0` — no `v` prefix). This is the upstream libdatadog version, distinct from libdatadog-dotnet's own release tag (e.g. `v1.3.5`) that `dd-trace-dotnet` pins. The chosen version must be API-compatible with `dd-trace-dotnet`'s native profiler C++ (it calls libdatadog's profiling FFI); otherwise the tracer's C++ build fails on missing identifiers like `ddog_prof_SampleType`. It's a coordinated change — bump + release here, then the tracer adopts the new release and builds against its profiling headers in the same rollout.
 
 ### Features
 
