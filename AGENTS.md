@@ -25,8 +25,11 @@ The builder handles the FFI cargo build, header generation (cbindgen + dedup), l
 
 ## Version Pinning
 
-The libdatadog version is in a single file: `LIBDATADOG_VERSION` (no `v` prefix, e.g. `30.0.0`).
+`LIBDATADOG_VERSION` (single file, no `v` prefix, e.g. `32.0.0`) is the **upstream** libdatadog version this repo builds from. It is distinct from libdatadog-dotnet's own release tag (e.g. `v1.3.5`) that dd-trace-dotnet pins — don't expect the two numbers to be equal.
 
+⚠️ **The chosen libdatadog version must be API-compatible with dd-trace-dotnet's native profiler C++.** The tracer's profiler (`cor_profiler.cpp`, `dd_profiler_constants.h`) calls libdatadog's profiling FFI (`ddog_prof_SampleType`, `DDOG_PROF_SAMPLE_TYPE_*`, …), and that API drifts between libdatadog tags. A mismatch surfaces in the tracer build as cryptic C++ errors like `error C2061: 'ddog_prof_SampleType'`.
+
+This is a **coordinated** change, not a precondition. You *can* bump `LIBDATADOG_VERSION` and cut a release ahead of the tracer — the tracer won't reference the new release yet, and that's expected. The requirement is only that the dd-trace-dotnet PR which adopts the new libdatadog-dotnet release also builds against its profiling headers in the same rollout, so the native profiler compiles against the matching API.
 
 ## Per-Platform Build Setup
 
@@ -99,7 +102,7 @@ libdatadog-dotnet/
 
 ## Common Tasks
 
-**Update libdatadog version**: edit `LIBDATADOG_VERSION`.
+**Update libdatadog version**: edit `LIBDATADOG_VERSION` (the upstream libdatadog version this repo builds from). Ensure the target libdatadog's profiling FFI is API-compatible with dd-trace-dotnet's native profiler C++ — the tracer adopts the resulting libdatadog-dotnet release in a coordinated PR; it won't already reference it. See [Version Pinning](#version-pinning).
 
 **Change feature set**: edit the `FEATURES` default in `build.sh`, the `Features` default in `build.ps1`, and the `features` input default in `build-platform.yml` / `release.yml` / `build.yml`. Feature names are the builder crate's high-level features (`profiling`, `crashtracker`, `data-pipeline`, `symbolizer`, `library-config`, `log`, `telemetry`, `ddsketch`, `ffe`), not the underlying cargo features.
 
