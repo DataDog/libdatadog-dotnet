@@ -127,6 +127,16 @@ Report what changed (version, and MSRV pin if touched). Then offer to:
 
 Do not commit or open a PR unless the user asks.
 
+**Always flag the coordinated-rollout caveat** so the bump isn't mistaken for a
+complete, self-contained change: bumping `LIBDATADOG_VERSION` (and cutting a
+release) here is fine on its own, but libdatadog's profiling FFI API drifts
+between tags. The new version is only proven compatible once the dd-trace-dotnet
+PR that adopts the new libdatadog-dotnet **release tag** (e.g. `v1.3.5` — a
+different number from `LIBDATADOG_VERSION`) compiles its native profiler
+(`cor_profiler.cpp`, `dd_profiler_constants.h`) against the matching profiling
+headers in the same rollout. This is a coordination requirement on the tracer
+side, **not** a precondition that blocks the bump here.
+
 ## Notes
 
 - Feature set is **not** part of a version bump — leave `FEATURES` / `Features`
