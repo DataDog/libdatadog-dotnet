@@ -41,7 +41,9 @@ curl -fsSL https://api.github.com/repos/DataDog/libdatadog/releases/latest \
 ```
 
 Read the current pin with the Read tool on `LIBDATADOG_VERSION`. If it already
-equals the target, tell the user and stop.
+equals the target, tell the user and stop. Otherwise **remember this value as
+`OLD_VERSION`** — Step 2 overwrites the file, and Step 3 needs the old version
+to detect an MSRV change.
 
 ### Step 2: Update LIBDATADOG_VERSION
 
@@ -54,9 +56,11 @@ with a different toolchain than upstream can introduce subtle codegen / ABI
 differences. The MSRV lives in `rust-version` under `[workspace.package]` in
 libdatadog's root `Cargo.toml`.
 
-Compare the MSRV at the **target** tag against the MSRV at the **currently
-pinned** tag — don't compare against a hardcoded number, since the repo's pin
-moves over time. Read the current pin from `LIBDATADOG_VERSION` first, then:
+Compare the MSRV at the **target** tag against the MSRV at the **`OLD_VERSION`**
+tag (the value captured in Step 1) — don't compare against a hardcoded number,
+since the repo's pin moves over time, and don't re-read `LIBDATADOG_VERSION`
+here (Step 2 already overwrote it with `TARGET`, so it would falsely report no
+change):
 
 ```bash
 extract_msrv() {  # $1 = libdatadog tag without leading v
@@ -64,8 +68,8 @@ extract_msrv() {  # $1 = libdatadog tag without leading v
     | grep -i 'rust-version' | head -n1 \
     | sed -E 's/.*"([0-9]+\.[0-9]+(\.[0-9]+)?)".*/\1/'
 }
-echo "current: $(extract_msrv <CURRENT_PIN>)"   # value from LIBDATADOG_VERSION
-echo "target:  $(extract_msrv <TARGET>)"
+echo "old:    $(extract_msrv <OLD_VERSION>)"   # the pin captured in Step 1
+echo "target: $(extract_msrv <TARGET>)"
 ```
 
 - **Same value** → MSRV unchanged, leave the toolchain alone. Skip to Step 4.
