@@ -27,7 +27,6 @@ The builder handles the FFI cargo build, header generation (cbindgen + dedup), l
 
 The libdatadog version is in a single file: `LIBDATADOG_VERSION` (no `v` prefix, e.g. `30.0.0`).
 
-⚠️ **It must match what dd-trace-dotnet's `build/cmake/FindLibdatadog.cmake` targets.** Mismatches surface in the tracer build as cryptic C++ errors like `error C2061: 'ddog_prof_SampleType'` — these are upstream API drifts between tags. Always check `gh api repos/DataDog/dd-trace-dotnet/contents/build/cmake/FindLibdatadog.cmake?ref=master --jq '.content' | base64 -d | grep LIBDATADOG_VERSION` before bumping.
 
 ## Per-Platform Build Setup
 
@@ -100,7 +99,7 @@ libdatadog-dotnet/
 
 ## Common Tasks
 
-**Update libdatadog version**: edit `LIBDATADOG_VERSION`. First confirm dd-trace-dotnet master's `FindLibdatadog.cmake` targets the same version.
+**Update libdatadog version**: edit `LIBDATADOG_VERSION`.
 
 **Change feature set**: edit the `FEATURES` default in `build.sh`, the `Features` default in `build.ps1`, and the `features` input default in `build-platform.yml` / `release.yml` / `build.yml`. Feature names are the builder crate's high-level features (`profiling`, `crashtracker`, `data-pipeline`, `symbolizer`, `library-config`, `log`, `telemetry`, `ddsketch`, `ffe`), not the underlying cargo features.
 
@@ -131,6 +130,7 @@ Output lands in `output/libdatadog-<platform>/`. For aarch64 Linux targets you n
 
 ## Recent Changes (Reverse Chronological)
 
+- **2026-06**: Bumped to libdatadog v36 (from v32). Rust toolchain pin already at `1.87.0`, which matches v36's MSRV, so no toolchain change was needed.
 - **2026-05**: aarch64-gnu switched from cross-rs cross-compile to QEMU + native manylinux2014_aarch64. Necessary because libdd-libunwind-sys (v30) can't be cross-compiled.
 - **2026-05**: Bumped to libdatadog v30 to match dd-trace-dotnet's API expectations.
 - **2026-05**: `build.ps1` rewritten to produce the legacy Windows zip layout (release+debug × dynamic+static) for dd-trace-dotnet portfile compatibility.
