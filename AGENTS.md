@@ -84,12 +84,12 @@ So `build.ps1`:
 
    Requirements:
    - The `create-release` job needs `permissions: id-token: write` (OIDC).
-   - The trust policy lives in `.github/chainguard/self.release.sts.yaml` — it pins issuer + `repository`/`ref`/`job_workflow_ref` (release from `main` only) and grants `contents: write`. The `dd-octo-sts-action` `policy:` input (`self.release`) names this file (minus `.sts.yaml`).
-   - The **octo-sts app must be installed** on `libdatadog-dotnet` and its identity on the ref-creation ruleset bypass list (org-managed; already in place for the other two repos).
+   - The trust policy lives in `.github/chainguard/self.release.sts.yaml` — it pins issuer + `subject` (main) + `event_name`/`ref`/`job_workflow_ref` claims and grants `contents: write`. The `dd-octo-sts-action` `policy:` input (`self.release`) names this file (minus `.sts.yaml`). **octo-sts reads the policy from the default branch (`main`) only** — never from a PR/feature ref — so the policy must be merged to `main` to take effect.
+   - No per-repo app install step: the dd-octo-sts GitHub App is installed **org-wide** at DataDog. Tag creation still needs the octo-sts identity to bypass the tag-protection ruleset — version tags are governed by the org-level ruleset (the same one dd-trace-dotnet releases under), so this is handled centrally.
 
    Failure symptoms:
-   - Error minting the token in the `octo-sts` step → the app isn't installed, or the OIDC claims don't match the policy (e.g. release run from a non-`main` ref, or the policy `job_workflow_ref` is wrong). Releases must be dispatched from `main`.
-   - `Cannot create ref due to creations being restricted` on `createRelease` → the octo-sts identity is **not on the ruleset bypass list**.
+   - Error minting the token in the `octo-sts` step → the OIDC claims don't match the policy (e.g. release dispatched from a non-`main` ref, wrong `job_workflow_ref`, or the policy isn't on `main` yet). The action prints the actual claims on failure — reconcile them into the policy. Releases must be dispatched from `main`.
+   - `Cannot create ref due to creations being restricted` on `createRelease` → the octo-sts identity isn't bypassing the tag ruleset; raise with the dd-octo-sts owners (#ask-octo-sts).
 
    Only the publish (`create-release`) step needs this; the build jobs don't. The retired `RELEASE_TOKEN` secret can be deleted once octo-sts is confirmed working.
 
