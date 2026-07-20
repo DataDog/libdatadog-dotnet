@@ -1,0 +1,19 @@
+# Trust policy for: .github/workflows/release.yml in DataDog/libdatadog-dotnet
+# Minted via DataDog/dd-octo-sts-action (scope DataDog/libdatadog-dotnet,
+# policy self.release) to create the release tag + GitHub release. Keyless
+# (OIDC) — no stored secret. Releases are always cut from main.
+#
+# Scoped per dd-octo-sts best practices: subject pinned to main, plus
+# event/workflow claim matching. If a release run fails to mint a token,
+# read the claims the action prints and reconcile them here.
+issuer: https://token.actions.githubusercontent.com
+
+subject: repo:DataDog/libdatadog-dotnet:ref:refs/heads/main
+
+claim_pattern:
+  event_name: workflow_dispatch
+  ref: refs/heads/main
+  job_workflow_ref: DataDog/libdatadog-dotnet/\.github/workflows/release\.yml@refs/heads/main
+
+permissions:
+  contents: write
