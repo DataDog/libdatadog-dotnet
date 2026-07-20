@@ -80,7 +80,18 @@ So `build.ps1`:
 
 6. **Toolchain pinned to upstream libdatadog's**: Rust `1.87.0` (matches libdatadog's workspace `rust-version`) and macOS runners `macos-14` / `macos-14-large` (Sonoma, matches libdatadog's libddprof-build pipeline). When upstream libdatadog bumps its MSRV or its macOS build version, update both here — building with a different toolchain than upstream can introduce subtle codegen / ABI differences. The pin lives in: `build-platform.yml` (Setup Rust step + matrix `os:` fields), `Dockerfile.centos-aarch64` (rustup-init `--default-toolchain`), and `Dockerfile.musl-*` (`ARG RUST_VERSION` consumed by the rustup install).
 
-7. **Release workflow needs `RELEASE_TOKEN`**: the repo's ref-creation ruleset blocks `GITHUB_TOKEN` from creating new tags, so `actions/github-script` in `release.yml` uses `github-token: ${{ secrets.RELEASE_TOKEN }}` (a fine-grained PAT with Contents: Read+Write, from a user on the ruleset's bypass list). Sometimes this secret needs rotating — symptom is the release job failing with `Cannot create ref due to creations being restricted` followed by `Published releases must have a valid tag`.
+7. **Release workflow auth (dd-octo-sts, keyless)**: the repo's ref-creation ruleset blocks `GITHUB_TOKEN` from creating new tags. `release.yml` mints a short-lived token via **DataDog's octo-sts** (OIDC federation — no stored secret) in the `octo-sts` step, and the `actions/github-script` publish step authenticates with `github-token: ${{ steps.octo-sts.outputs.token }}`. The octo-sts identity is on the ruleset's **bypass list**, so it can create the tag ref. This matches how **dd-trace-dotnet and upstream libdatadog** authenticate their release workflows — and because it's OIDC-federated there's **no token to store or rotate** (this replaced the old `RELEASE_TOKEN` PAT, which DataDog policy capped at ~30 days, forcing monthly rotation).
+
+   Requirements:
+   - The `create-release` job needs `permissions: id-token: write` (OIDC).
+   - The trust policy lives in `.github/chainguard/self.release.sts.yaml` — it pins issuer + `repository`/`ref`/`job_workflow_ref` (release from `main` only) and grants `contents: write`. The `dd-octo-sts-action` `policy:` input (`self.release`) names this file (minus `.sts.yaml`).
+   - The **octo-sts app must be installed** on `libdatadog-dotnet` and its identity on the ref-creation ruleset bypass list (org-managed; already in place for the other two repos).
+
+   Failure symptoms:
+   - Error minting the token in the `octo-sts` step → the app isn't installed, or the OIDC claims don't match the policy (e.g. release run from a non-`main` ref, or the policy `job_workflow_ref` is wrong). Releases must be dispatched from `main`.
+   - `Cannot create ref due to creations being restricted` on `createRelease` → the octo-sts identity is **not on the ruleset bypass list**.
+
+   Only the publish (`create-release`) step needs this; the build jobs don't. The retired `RELEASE_TOKEN` secret can be deleted once octo-sts is confirmed working.
 
 ## File Layout
 
@@ -108,13 +119,13 @@ libdatadog-dotnet/
 
 **Add a platform**: matrix entry in `build-platform.yml`; if it's not host-native, either add a Dockerfile + dispatch case in `build.sh`, or use QEMU. Update the release archive list in `release.yml`.
 
-**Cut a release**: Actions → Release → Run workflow. Default `version_increment: patch` is usually right. The job tag + publish step needs `RELEASE_TOKEN` (see gotcha #6).
+**Cut a release**: Actions → Release → Run workflow, **from `main`**. Default `version_increment: patch` is usually right. The tag + publish step authenticates via dd-octo-sts (OIDC; policy in `.github/chainguard/self.release.sts.yaml`) — see gotcha #7.
 
 ## Workflow Files
 
 - **`build-platform.yml`** — reusable matrix workflow. Steps: checkout → setup Rust → cache `~/.cargo/{registry,git}` → setup QEMU (only for aarch64 Linux targets) → run `build.{sh,ps1}` → verify output → upload artifact.
 - **`build.yml`** — calls `build-platform.yml` on PR / push to main with `verify_artifacts: true`.
-- **`release.yml`** — manual dispatch. Builds all 8 platforms (no verify), archives them, computes SHA256 + SHA512, creates a GitHub release with assets and a checksums-in-the-body note. Uses `RELEASE_TOKEN`.
+- **`release.yml`** — manual dispatch (from `main`). Builds all 8 platforms (no verify), archives them, computes SHA256 + SHA512, creates a GitHub release with assets and a checksums-in-the-body note. Publish step auth via dd-octo-sts (OIDC; policy in `.github/chainguard/self.release.sts.yaml`).
 
 ## Testing Locally
 

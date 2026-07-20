@@ -73,7 +73,7 @@ macOS and Windows builds run natively on the appropriate GitHub-hosted runner.
 
 Manual dispatch: **Actions → Release → Run workflow**. The workflow builds all 8 platforms, creates a git tag, and publishes a GitHub release with checksums.
 
-**Prerequisites**: a `RELEASE_TOKEN` secret (a fine-grained PAT with Contents: Read+Write, issued from an account on the repo's ruleset bypass list). The default `GITHUB_TOKEN` is blocked from creating tag refs.
+**Prerequisites**: authentication is via DataDog's **octo-sts** (keyless OIDC — no stored secret). The workflow mints a short-lived token with `DataDog/dd-octo-sts-action`, governed by the trust policy in `.github/chainguard/self.release.sts.yaml`. The octo-sts app must be installed on the repo and on the ref-creation ruleset's bypass list (the default `GITHUB_TOKEN` is blocked from creating tag refs). Releases are dispatched from `main`. Nothing to rotate.
 
 **Inputs**:
 
