@@ -15,18 +15,28 @@ FROM alpine:3.18
 # binutils provides objcopy (see the crt decompression step below).
 RUN apk add --no-cache musl-dev gcc g++ make curl perl cmake ca-certificates binutils
 
-# Alpine builds its libc crt objects (crti.o, crtn.o, ...) with zlib-compressed
-# debug sections. libdatadog's otel-thread-ctx-ffi crate forces the link through
-# rust's bundled rust-lld (cc -fuse-ld=lld -B.../gcc-ld, to merge version scripts
-# and keep the TLSDESC dynsym entry), and rust-lld is built WITHOUT zlib support,
-# so it can't read those sections and the link fails with:
-#   rust-lld: error: /usr/lib/crtn.o:(.debug_line) is compressed with
-#   ELFCOMPRESS_ZLIB, but lld is not built with zlib support
-# Decompress them in place so rust-lld can read them. objcopy leaves already
-# uncompressed objects untouched, so the loop is safe over every crt*.o.
+# Alpine's gcc/as compress debug sections by default (ELFCOMPRESS_ZLIB).
+# libdatadog's otel-thread-ctx-ffi crate forces the final link through rust's
+# bundled rust-lld (cc -fuse-ld=lld -B.../gcc-ld, to merge version scripts and
+# keep the TLSDESC dynsym entry), and rust-lld is built WITHOUT zlib support, so
+# it can't read compressed debug sections and every such object breaks the link:
+#   rust-lld: error: ...:(.debug_line) is compressed with ELFCOMPRESS_ZLIB,
+#   but lld is not built with zlib support
+# Two sources of compressed objects, fixed two ways:
+#
+# 1. Prebuilt libc/gcc crt objects (crti.o, crtn.o, ...) shipped compressed by
+#    the Alpine packages. Decompress them in place (objcopy no-ops on already
+#    uncompressed objects, so the loop is safe over every crt*.o).
 RUN for f in $(find /usr/lib -name 'crt*.o'); do \
         objcopy --decompress-debug-sections "$f" "$f" || true; \
     done
+
+# 2. Objects compiled during the build itself (ring, zstd-sys, libunwind, ...).
+#    -gz=none disables debug-section compression for every C/C++/asm compile
+#    (gcc forwards it as --nocompress-debug-sections to the assembler), so the
+#    objects rust-lld ends up linking are readable.
+ENV CFLAGS="-gz=none" \
+    CXXFLAGS="-gz=none"
 
 # Match rust:alpine's layout so build.sh's PATH override (which prepends
 # /usr/local/cargo/bin) keeps working unchanged.
