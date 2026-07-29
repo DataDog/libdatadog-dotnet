@@ -200,11 +200,22 @@ docker_run_musl() {
             # For musl targets, the builder'"'"'s musl.rs RUSTFLAGS is missing
             # -C target-feature=-crt-static, which is required to build a cdylib
             # (musl defaults to crt-static=true, disabling cdylib support).
+            # rustc defaults *-unknown-linux-musl to its bundled rust-lld linker,
+            # which is built without zlib support. -crt-static=- makes us link
+            # dynamically against the system musl libc from Alpine, whose crt
+            # objects (crti.o/crtn.o) have zlib-compressed debug sections (an
+            # Alpine gcc default) that rust-lld cannot read, so linking fails
+            # with "compressed with ELFCOMPRESS_ZLIB, but lld is not built
+            # with zlib support". -C link-self-contained=no makes rustc invoke
+            # the system cc as the linker driver instead, using the system GNU
+            # ld from Alpine (which handles zlib fine) -- consistent with
+            # -crt-static=- already opting into the systems dynamic musl libc
+            # instead of the one bundled with rustc.
             # Flags are separated by \x1f (ASCII unit separator, octal \037).
             case "${BUILDER_TARGET}" in
                 *-musl)
                     SEP=$(printf "\037")
-                    export CARGO_ENCODED_RUSTFLAGS="-C${SEP}relocation-model=pic${SEP}-C${SEP}target-feature=-crt-static${SEP}-C${SEP}link-arg=-Wl,-soname,libdatadog_profiling.so"
+                    export CARGO_ENCODED_RUSTFLAGS="-C${SEP}relocation-model=pic${SEP}-C${SEP}target-feature=-crt-static${SEP}-C${SEP}link-self-contained=no${SEP}-C${SEP}link-arg=-Wl,-soname,libdatadog_profiling.so"
                     ;;
             esac
             # The builder calls cmake::Config::build() at runtime, outside of a
