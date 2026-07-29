@@ -12,7 +12,21 @@ FROM alpine:3.18
 # cmake and make are required by the aws-lc-sys build script.
 # perl is required by the OpenSSL/AWS-LC build.
 # ca-certificates is required for rustup to fetch over HTTPS.
-RUN apk add --no-cache musl-dev gcc g++ make curl perl cmake ca-certificates
+# binutils provides objcopy (see the crt decompression step below).
+RUN apk add --no-cache musl-dev gcc g++ make curl perl cmake ca-certificates binutils
+
+# Alpine builds its libc crt objects (crti.o, crtn.o, ...) with zlib-compressed
+# debug sections. libdatadog's otel-thread-ctx-ffi crate forces the link through
+# rust's bundled rust-lld (cc -fuse-ld=lld -B.../gcc-ld, to merge version scripts
+# and keep the TLSDESC dynsym entry), and rust-lld is built WITHOUT zlib support,
+# so it can't read those sections and the link fails with:
+#   rust-lld: error: /usr/lib/crtn.o:(.debug_line) is compressed with
+#   ELFCOMPRESS_ZLIB, but lld is not built with zlib support
+# Decompress them in place so rust-lld can read them. objcopy leaves already
+# uncompressed objects untouched, so the loop is safe over every crt*.o.
+RUN for f in $(find /usr/lib -name 'crt*.o'); do \
+        objcopy --decompress-debug-sections "$f" "$f" || true; \
+    done
 
 # Match rust:alpine's layout so build.sh's PATH override (which prepends
 # /usr/local/cargo/bin) keeps working unchanged.
