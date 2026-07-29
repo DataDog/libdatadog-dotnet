@@ -16,7 +16,7 @@ cargo install \
     --tag "v${LIBDATADOG_VERSION}" \
     --bin release \
     --no-default-features \
-    --features "profiling,crashtracker,symbolizer,library-config" \
+    --features "profiling,crashtracker,symbolizer,library-config,otel-thread-ctx" \
     builder
 release --out <package-dir> --target <triple>
 ```
@@ -115,7 +115,7 @@ libdatadog-dotnet/
 
 **Update libdatadog version**: edit `LIBDATADOG_VERSION` (the upstream libdatadog version this repo builds from). Ensure the target libdatadog's profiling FFI is API-compatible with dd-trace-dotnet's native profiler C++ — the tracer adopts the resulting libdatadog-dotnet release in a coordinated PR; it won't already reference it. See [Version Pinning](#version-pinning).
 
-**Change feature set**: edit the `FEATURES` default in `build.sh`, the `Features` default in `build.ps1`, and the `features` input default in `build-platform.yml` / `release.yml` / `build.yml`. Feature names are the builder crate's high-level features (`profiling`, `crashtracker`, `data-pipeline`, `symbolizer`, `library-config`, `log`, `telemetry`, `ddsketch`, `ffe`), not the underlying cargo features.
+**Change feature set**: edit the `FEATURES` default in `build.sh`, the `Features` default in `build.ps1`, and the `features` input default in `build-platform.yml` / `release.yml` / `build.yml`. Feature names are the builder crate's high-level features (`profiling`, `crashtracker`, `data-pipeline`, `symbolizer`, `library-config`, `log`, `telemetry`, `ddsketch`, `ffe`, `otel-thread-ctx`, `shared-runtime`, `regex-lite`), not the underlying cargo features — e.g. the builder's `otel-thread-ctx` feature internally maps to the `otel-thread-ctx-ffi` FFI crate (see `builder/src/bin/release.rs` in libdatadog), so pass `otel-thread-ctx` here, never the FFI crate name.
 
 **Add a platform**: matrix entry in `build-platform.yml`; if it's not host-native, either add a Dockerfile + dispatch case in `build.sh`, or use QEMU. Update the release archive list in `release.yml`.
 
