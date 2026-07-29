@@ -68,7 +68,7 @@ VERSION=$(cat LIBDATADOG_VERSION)
 # These control which FFI modules are included in the output library.
 # Feature names map to flags in builder/src/bin/release.rs in libdatadog.
 # Override via --features on the command line.
-FEATURES="${FEATURES:-profiling,crashtracker,symbolizer,library-config}"
+FEATURES="${FEATURES:-profiling,crashtracker,symbolizer,library-config,libdd-otel-thread-ctx-ffi}"
 
 if [[ "$CLEAN" == true ]]; then
     rm -rf "$OUTPUT_DIR"
