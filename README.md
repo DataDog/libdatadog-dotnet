@@ -36,7 +36,7 @@ To upgrade the upstream libdatadog version, edit the `LIBDATADOG_VERSION` file (
 Built with the comma-separated feature set the .NET tracer needs (see `build.ps1` / workflow inputs):
 
 ```
-profiling,crashtracker,symbolizer,library-config
+profiling,crashtracker,symbolizer,library-config,otel-thread-ctx
 ```
 
 These are the builder-crate feature flags upstream libdatadog exposes — names map to the underlying cargo features inside libdatadog. Upstream's default release additionally enables `telemetry`, `data-pipeline`, `log`, `ddsketch`, and `ffe`; we omit them, saving binary size. (`data-pipeline` and `log` were dropped once dd-trace-dotnet removed the libdatadog-based trace exporter and its logger — DataDog/dd-trace-dotnet#8703.)

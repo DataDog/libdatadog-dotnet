@@ -16,7 +16,7 @@ cargo install \
     --tag "v${LIBDATADOG_VERSION}" \
     --bin release \
     --no-default-features \
-    --features "profiling,crashtracker,symbolizer,library-config" \
+    --features "profiling,crashtracker,symbolizer,library-config,otel-thread-ctx" \
     builder
 release --out <package-dir> --target <triple>
 ```
@@ -74,7 +74,7 @@ So `build.ps1`:
 
 3. **CentOS 7 EOL repo rewrite**: all `mirror.centos.org` URLs are gone. `Dockerfile.centos` rewrites them to `vault.centos.org` *twice* — once for the base repos, then again after `centos-release-scl` drops new files pointing at the dead mirror.
 
-4. **musl `-crt-static`**: the builder's `arch/musl.rs` sets RUSTFLAGS without `-C target-feature=-crt-static`, which breaks `cdylib` (musl defaults to crt-static). Our `docker_run_musl` injects it via `CARGO_ENCODED_RUSTFLAGS` (`\x1f`-separated, higher priority than the builder's `RUSTFLAGS` env).
+4. **musl `-crt-static`**: the builder's `arch/musl.rs` sets RUSTFLAGS without `-C target-feature=-crt-static`, which breaks `cdylib` (musl defaults to crt-static). Our `docker_run_musl` injects it via `CARGO_ENCODED_RUSTFLAGS` (`\x1f`-separated, higher priority than the builder's `RUSTFLAGS` env). The same injection also adds `-C link-self-contained=no`: rustc defaults `*-unknown-linux-musl` to its bundled `rust-lld`, which has no zlib support, so it can't read the zlib-compressed debug sections in Alpine gcc's system `crti.o`/`crtn.o` — fails with `compressed with ELFCOMPRESS_ZLIB, but lld is not built with zlib support`. Forcing `link-self-contained=no` makes rustc invoke `cc` → Alpine's system GNU `ld` instead, which handles zlib fine.
 
 5. **cmake-rs needs cargo build-script env on macOS**: the builder calls `cmake::Config::build()` for the crashtracker C++ receiver outside a cargo build-script context. cmake-rs / cc-rs read `HOST` / `OUT_DIR` / `OPT_LEVEL` / `DEBUG` / `NUM_JOBS`. The macOS branch of `build.sh` sets all of them; missing any one panics with `environment variable 'X' not defined`. (Windows doesn't hit this — `BUILD_CRASHTRACKER = false` in the builder's `arch/windows.rs`.)
 
@@ -115,7 +115,7 @@ libdatadog-dotnet/
 
 **Update libdatadog version**: edit `LIBDATADOG_VERSION` (the upstream libdatadog version this repo builds from). Ensure the target libdatadog's profiling FFI is API-compatible with dd-trace-dotnet's native profiler C++ — the tracer adopts the resulting libdatadog-dotnet release in a coordinated PR; it won't already reference it. See [Version Pinning](#version-pinning).
 
-**Change feature set**: edit the `FEATURES` default in `build.sh`, the `Features` default in `build.ps1`, and the `features` input default in `build-platform.yml` / `release.yml` / `build.yml`. Feature names are the builder crate's high-level features (`profiling`, `crashtracker`, `data-pipeline`, `symbolizer`, `library-config`, `log`, `telemetry`, `ddsketch`, `ffe`), not the underlying cargo features.
+**Change feature set**: edit the `FEATURES` default in `build.sh`, the `Features` default in `build.ps1`, and the `features` input default in `build-platform.yml` / `release.yml` / `build.yml`. Feature names are the builder crate's high-level features (`profiling`, `crashtracker`, `data-pipeline`, `symbolizer`, `library-config`, `log`, `telemetry`, `ddsketch`, `ffe`, `otel-thread-ctx`, `shared-runtime`, `regex-lite`), not the underlying cargo features — e.g. the builder's `otel-thread-ctx` feature internally maps to the `otel-thread-ctx-ffi` FFI crate (see `builder/src/bin/release.rs` in libdatadog), so pass `otel-thread-ctx` here, never the FFI crate name.
 
 **Add a platform**: matrix entry in `build-platform.yml`; if it's not host-native, either add a Dockerfile + dispatch case in `build.sh`, or use QEMU. Update the release archive list in `release.yml`.
 
@@ -144,6 +144,7 @@ Output lands in `output/libdatadog-<platform>/`. For aarch64 Linux targets you n
 
 ## Recent Changes (Reverse Chronological)
 
+- **2026-07**: Bumped to libdatadog v38 (from v36). Rust toolchain pin already at `1.87.0`, which matches v38's MSRV, so no toolchain change was needed.
 - **2026-06**: Bumped to libdatadog v36 (from v32). Rust toolchain pin already at `1.87.0`, which matches v36's MSRV, so no toolchain change was needed.
 - **2026-05**: aarch64-gnu switched from cross-rs cross-compile to QEMU + native manylinux2014_aarch64. Necessary because libdd-libunwind-sys (v30) can't be cross-compiled.
 - **2026-05**: Bumped to libdatadog v30 to match dd-trace-dotnet's API expectations.

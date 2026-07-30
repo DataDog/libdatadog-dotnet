@@ -26,4 +26,4 @@ jobs:
       contents: read
     with:
       verify_artifacts: true
-      features: 'profiling,crashtracker,symbolizer,library-config'
+      features: 'profiling,crashtracker,symbolizer,library-config,otel-thread-ctx'
