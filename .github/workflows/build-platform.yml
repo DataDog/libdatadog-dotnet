@@ -116,6 +116,16 @@ jobs:
           fi
         shell: bash
 
+      # The Linux builds run inside Docker as root, so files written into the
+      # mounted ~/.cargo are root-owned. The post-job cache-save then runs tar as
+      # the unprivileged runner user and prints alarming "Permission denied"
+      # warnings (harmless, but they've spooked people into cancelling runs).
+      # Restore ownership so the cache saves cleanly.
+      - name: Fix cargo cache ownership
+        if: runner.os == 'Linux'
+        run: sudo chown -R "$(id -u):$(id -g)" ~/.cargo
+        shell: bash
+
       - name: Verify build artifacts
         if: inputs.verify_artifacts
         run: |
