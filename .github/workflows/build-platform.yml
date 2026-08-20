@@ -11,10 +11,10 @@ on:
   workflow_call:
     inputs:
       features:
-        description: 'Comma-separated builder crate features (e.g. profiling,crashtracker,symbolizer,library-config,otel-thread-ctx)'
+        description: 'Comma-separated builder crate features (e.g. profiling,crashtracker,symbolizer,library-config)'
         required: false
         type: string
-        default: 'profiling,crashtracker,symbolizer,library-config,otel-thread-ctx'
+        default: 'profiling,crashtracker,symbolizer,library-config'
       verify_artifacts:
         description: 'Whether to verify build artifacts after building'
         required: false

@@ -16,7 +16,7 @@ cargo install \
     --tag "v${LIBDATADOG_VERSION}" \
     --bin release \
     --no-default-features \
-    --features "profiling,crashtracker,symbolizer,library-config,otel-thread-ctx" \
+    --features "profiling,crashtracker,symbolizer,library-config" \
     builder
 release --out <package-dir> --target <triple>
 ```
