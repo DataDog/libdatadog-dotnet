@@ -12,7 +12,7 @@
 # Produces a Windows zip with the legacy layout the .NET tracer's vcpkg
 # portfile and runtime DLL loader still expect:
 #
-#   release/dynamic/datadog_profiling_ffi.{dll,lib,pdb}   (DLL + import lib)
+#   release/dynamic/datadog_profiling_ffi.{dll,lib,pdb}   (DLL + import lib, from datadog-dotnet-ffi)
 #   release/static/datadog_profiling_ffi.lib              (static archive)
 #   debug/dynamic/datadog_profiling_ffi.{dll,lib,pdb}
 #   debug/static/datadog_profiling_ffi.lib
@@ -24,12 +24,18 @@
 # by name, the MSI installer references it, etc.).  We therefore run the
 # builder once per profile (release + debug) and re-assemble the layout
 # from cargo's raw target/ outputs, which keep the _ffi names.
+#
+# The DLL itself is the datadog-dotnet-ffi library (see Cargo.toml): libdatadog's
+# profiling FFI plus the .NET specific FFI.  It is renamed to datadog_profiling_ffi.dll,
+# with an import library generated for that name.
 
 param(
     [string]$Platform = "x64-windows",
     [string]$OutputDir = "output",
     [string]$Features = "profiling,crashtracker,symbolizer,library-config",
-    [switch]$Clean
+    [switch]$Clean,
+    # Build from a local libdatadog checkout instead of the tag in LIBDATADOG_VERSION
+    [string]$LibdatadogPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -71,6 +77,29 @@ New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 $OutputDir = (Resolve-Path $OutputDir).Path
 $PackageDir = Join-Path $OutputDir "libdatadog-$Platform"
 
+# The libdatadog sources the builder is installed from: either a checkout of the release
+# tag, or a junction to a local checkout.
+$LibdatadogDir = Join-Path $PWD "libdatadog"
+$LibdatadogItem = Get-Item $LibdatadogDir -ErrorAction SilentlyContinue
+$IsLink = $LibdatadogItem -and $LibdatadogItem.LinkType
+if ($LibdatadogPath) {
+    if ($LibdatadogItem -and -not $IsLink) {
+        Write-Host "Error: $LibdatadogDir exists and is not a link, remove it to use -LibdatadogPath" -ForegroundColor Red
+        exit 1
+    }
+    if ($IsLink) { $LibdatadogItem.Delete() }
+    New-Item -ItemType Junction -Path $LibdatadogDir -Target (Resolve-Path $LibdatadogPath).Path | Out-Null
+} elseif ($IsLink) {
+    Write-Host "Error: $LibdatadogDir links to a local checkout, pass -LibdatadogPath or remove it" -ForegroundColor Red
+    exit 1
+} elseif (-not $LibdatadogItem) {
+    git clone --quiet --depth 1 --branch "v${Version}" https://github.com/DataDog/libdatadog $LibdatadogDir
+    if ($LASTEXITCODE -ne 0) { Write-Host "Error: git clone failed" -ForegroundColor Red; exit 1 }
+} elseif ((git -C $LibdatadogDir describe --tags --exact-match 2>$null) -ne "v${Version}") {
+    Write-Host "Error: $LibdatadogDir is not a checkout of v${Version}, remove it to check out the right version" -ForegroundColor Red
+    exit 1
+}
+
 # Install the builder binary once.  Each subsequent profile run reuses it.
 # Clear CARGO_BUILD_TARGET so `cargo install` compiles the builder for the
 # host (x86_64).  The workflow sets CARGO_BUILD_TARGET=i686-pc-windows-msvc
@@ -81,8 +110,7 @@ $PackageDir = Join-Path $OutputDir "libdatadog-$Platform"
 $savedTarget = $env:CARGO_BUILD_TARGET
 $env:CARGO_BUILD_TARGET = $null
 cargo install `
-    --git https://github.com/DataDog/libdatadog `
-    --tag "v${Version}" `
+    --path libdatadog/builder `
     --bin release `
     --root .builder `
     --no-default-features `
@@ -143,6 +171,49 @@ function Invoke-Builder {
 $ReleaseOut = Invoke-Builder -BuildProfile "release"
 $DebugOut   = Invoke-Builder -BuildProfile "debug"
 
+# Build datadog-dotnet-ffi, which replaces the profiling DLL.  The PDB path embedded in the
+# DLL already gets the final name.  Uses the dependency versions libdatadog is tested with.
+Copy-Item -Path (Join-Path $LibdatadogDir "Cargo.lock") -Destination (Join-Path $PWD "Cargo.lock") -Force
+$env:CARGO_TARGET_DIR = $CargoTargetDir
+$env:RUSTFLAGS = "-C relocation-model=pic -C target-feature=+crt-static -C link-arg=/PDBALTPATH:datadog_profiling_ffi.pdb"
+foreach ($p in @("release", "debug")) {
+    $cargoProfile = if ($p -eq "debug") { "dev" } else { $p }
+    cargo build -p datadog-dotnet-ffi --target $Target --profile $cargoProfile
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Error: building datadog-dotnet-ffi ($p) failed" -ForegroundColor Red
+        exit 1
+    }
+}
+$env:RUSTFLAGS = $null
+
+# Creates an import library for $Dll under the name $DllName.
+function New-ImportLibrary {
+    param([string]$Dll, [string]$DllName, [string]$OutLib)
+
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+    $toolsBin = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+        -find "VC\Tools\MSVC\**\bin\Hostx64\x64" | Select-Object -First 1
+    if (-not $toolsBin) {
+        Write-Host "Error: MSVC tools not found" -ForegroundColor Red
+        exit 1
+    }
+    $machine = if ($Target -like "i686-*") { "X86" } else { "X64" }
+
+    # Lines like "          1    0 000A1B20 ddog_Error_drop"
+    $exports = & (Join-Path $toolsBin "dumpbin.exe") /nologo /exports $Dll | ForEach-Object {
+        if ($_ -match '^\s+\d+\s+[0-9A-F]+\s+[0-9A-F]{8}\s+(\S+)') { $Matches[1] }
+    }
+    $def = [IO.Path]::ChangeExtension($OutLib, ".def")
+    @("LIBRARY $DllName", "EXPORTS") + ($exports | ForEach-Object { "    $_" }) | Set-Content -Encoding ascii $def
+    & (Join-Path $toolsBin "lib.exe") /nologo "/def:$def" "/machine:$machine" "/out:$OutLib"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Error: creating the import library failed" -ForegroundColor Red
+        exit 1
+    }
+    Remove-Item $def
+    Remove-Item ([IO.Path]::ChangeExtension($OutLib, ".exp")) -ErrorAction SilentlyContinue
+}
+
 # --- Assemble the dd-trace-dotnet-compatible package ---
 Write-Host "Assembling legacy Windows package layout..." -ForegroundColor Yellow
 
@@ -170,19 +241,19 @@ foreach ($f in @("LICENSE", "NOTICE", "LICENSE-3rdparty.csv")) {
 #   - datadog_profiling_ffi.dll.lib   (import library for the cdylib)
 #   - datadog_profiling_ffi.lib       (staticlib)
 #   - datadog_profiling_ffi.pdb
-# The builder copies the .dll and the staticlib .lib but does not copy the
-# import library, so we pick all four directly from the cargo target dir.
-# The import library is renamed .dll.lib -> .lib in the dynamic slot to match
-# what the tracer's vcpkg portfile expects.
+# The static slot gets that staticlib.  The dynamic slot gets the datadog-dotnet-ffi
+# DLL and PDB instead, renamed, with a generated datadog_profiling_ffi.lib import library
+# (the import library cargo produces refers to datadog_dotnet_ffi.dll).
 foreach ($p in @("release", "debug")) {
     $cargoOut  = Join-Path $CargoTargetDir "$Target/$p"
     $dynDir    = Join-Path $PackageDir "$p/dynamic"
     $staticDir = Join-Path $PackageDir "$p/static"
     New-Item -ItemType Directory -Force -Path $dynDir, $staticDir | Out-Null
 
-    Copy-Item -Path (Join-Path $cargoOut "datadog_profiling_ffi.dll")     -Destination (Join-Path $dynDir "datadog_profiling_ffi.dll")
-    Copy-Item -Path (Join-Path $cargoOut "datadog_profiling_ffi.dll.lib") -Destination (Join-Path $dynDir "datadog_profiling_ffi.lib")
-    Copy-Item -Path (Join-Path $cargoOut "datadog_profiling_ffi.pdb")     -Destination (Join-Path $dynDir "datadog_profiling_ffi.pdb")
+    Copy-Item -Path (Join-Path $cargoOut "datadog_dotnet_ffi.dll")        -Destination (Join-Path $dynDir "datadog_profiling_ffi.dll")
+    Copy-Item -Path (Join-Path $cargoOut "datadog_dotnet_ffi.pdb")        -Destination (Join-Path $dynDir "datadog_profiling_ffi.pdb")
+    New-ImportLibrary -Dll (Join-Path $dynDir "datadog_profiling_ffi.dll") -DllName "datadog_profiling_ffi.dll" `
+        -OutLib (Join-Path $dynDir "datadog_profiling_ffi.lib")
     Copy-Item -Path (Join-Path $cargoOut "datadog_profiling_ffi.lib")     -Destination (Join-Path $staticDir "datadog_profiling_ffi.lib")
 }
 

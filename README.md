@@ -43,20 +43,25 @@ These are the builder-crate feature flags upstream libdatadog exposes — names 
 
 ## How It Works
 
-We install libdatadog's own `release` binary (from its `builder` crate) at the pinned tag, then let it produce the package:
+We check out libdatadog at the pinned tag (into `libdatadog/`), install its own `release` binary (from its `builder` crate), let it produce the package, and then replace the package's shared library with our own build:
 
 ```
+git clone --depth 1 --branch "v${LIBDATADOG_VERSION}" https://github.com/DataDog/libdatadog libdatadog
 cargo install \
-    --git https://github.com/DataDog/libdatadog \
-    --tag "v${LIBDATADOG_VERSION}" \
+    --path libdatadog/builder \
     --bin release \
     --no-default-features \
     --features "<feature-list>" \
     builder
 release --out <package-dir> --target <triple>
+tools/build-ffi.sh <triple> <profile> <package-dir>
 ```
 
 The builder handles the FFI cargo build, header generation (cbindgen + dedup), library stripping, and packaging.
+
+The shared library itself (`libdatadog_profiling.{so,dylib}`, `datadog_profiling_ffi.dll`) comes from `datadog-dotnet-ffi`, this repository's crate: it re-exports libdatadog's profiling FFI (with the same features) and adds .NET specific FFI, like the remote configuration client (`ddog_rc_*`). It keeps the library name, so it's a drop-in replacement for the C++ profiler and the tracer. Only the .NET tracer uses the additional exports, so there are no headers for them.
+
+`datadog-dotnet-ffi` depends on libdatadog's crates by git revision (see `datadog-dotnet-ffi/Cargo.toml`), so it builds on its own; this can be a commit on top of the tag with unreleased changes. To run the builder from a local libdatadog checkout instead of the tag, pass `--libdatadog-path ../libdatadog` (`-LibdatadogPath` on Windows); to build `datadog-dotnet-ffi` against it, add a `[patch."https://github.com/DataDog/libdatadog"]` section with path dependencies.
 
 **Windows quirk**: the builder produces a flat `lib/datadog_profiling.{dll,lib,pdb}` layout, but dd-trace-dotnet's vcpkg portfile expects the legacy `release/{dynamic,static}` + `debug/{dynamic,static}` tree with `_ffi`-suffixed filenames. `build.ps1` runs the builder twice (release + debug) and reassembles that layout from cargo's raw `target/` output.
 

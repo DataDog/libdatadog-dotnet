@@ -18,6 +18,7 @@ OUTPUT_DIR="output"
 PROFILE="release"
 FEATURES=""
 CLEAN=false
+LIBDATADOG_PATH=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -26,6 +27,7 @@ while [[ $# -gt 0 ]]; do
         --profile)  PROFILE="$2"; shift 2 ;;
         --features) FEATURES="$2"; shift 2 ;;
         --clean)    CLEAN=true; shift ;;
+        --libdatadog-path) LIBDATADOG_PATH="$2"; shift 2 ;;
         -h|--help)
             echo "Usage: $0 --platform PLATFORM [OPTIONS]"
             echo ""
@@ -37,6 +39,8 @@ while [[ $# -gt 0 ]]; do
             echo "                       (default: profiling,crashtracker,"
             echo "                                symbolizer,library-config)"
             echo "  --clean              Remove output directory before building"
+            echo "  --libdatadog-path P  Build from a local libdatadog checkout instead of"
+            echo "                       the tag in LIBDATADOG_VERSION"
             echo "  -h, --help           Show this help"
             echo ""
             echo "Environment variables:"
@@ -78,6 +82,29 @@ mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 PACKAGE_DIR="$OUTPUT_DIR/libdatadog-${PLATFORM:-$TARGET}"
 
+# The libdatadog sources the builder is installed from: either a checkout of the release
+# tag, or a symlink to a local checkout.
+LIBDATADOG_DIR="$SCRIPT_DIR/libdatadog"
+DOCKER_LIBDATADOG_MOUNT=()
+if [[ -n "$LIBDATADOG_PATH" ]]; then
+    LIBDATADOG_PATH="$(cd "$LIBDATADOG_PATH" && pwd)"
+    if [[ -e "$LIBDATADOG_DIR" && ! -L "$LIBDATADOG_DIR" ]]; then
+        echo "Error: $LIBDATADOG_DIR exists and is not a symlink, remove it to use --libdatadog-path" >&2
+        exit 1
+    fi
+    ln -sfn "$LIBDATADOG_PATH" "$LIBDATADOG_DIR"
+    # Mounted at the same path, so that the symlink also resolves inside the containers
+    DOCKER_LIBDATADOG_MOUNT=(-v "$LIBDATADOG_PATH:$LIBDATADOG_PATH")
+elif [[ -L "$LIBDATADOG_DIR" ]]; then
+    echo "Error: $LIBDATADOG_DIR is a symlink to a local checkout, pass --libdatadog-path or remove it" >&2
+    exit 1
+elif [[ ! -e "$LIBDATADOG_DIR" ]]; then
+    git clone --quiet --depth 1 --branch "v${VERSION}" https://github.com/DataDog/libdatadog "$LIBDATADOG_DIR"
+elif [[ "$(git -C "$LIBDATADOG_DIR" describe --tags --exact-match 2>/dev/null)" != "v${VERSION}" ]]; then
+    echo "Error: $LIBDATADOG_DIR is not a checkout of v${VERSION}, remove it to check out the right version" >&2
+    exit 1
+fi
+
 # docker_run_gnu IMAGE TARGET PLATFORM
 # Runs the builder inside an x86_64 GNU/glibc container (CentOS 7 sysroot).
 # The host Rust toolchain is mounted read-write so that:
@@ -98,6 +125,7 @@ docker_run_gnu() {
         -v "${cargo_home}:/usr/local/cargo" \
         -v "${rustup_home}:/usr/local/rustup" \
         -v "$SCRIPT_DIR:/workspace" \
+        "${DOCKER_LIBDATADOG_MOUNT[@]}" \
         -w /workspace \
         -e CARGO_HOME=/usr/local/cargo \
         -e RUSTUP_HOME=/usr/local/rustup \
@@ -115,8 +143,7 @@ docker_run_gnu() {
             # binary without interference from any RUSTFLAGS overrides.
             unset CARGO_ENCODED_RUSTFLAGS
             cargo install \
-                --git https://github.com/DataDog/libdatadog \
-                --tag "v${BUILDER_VERSION}" \
+                --path /workspace/libdatadog/builder \
                 --bin release \
                 --root /tmp/builder \
                 --no-default-features \
@@ -149,6 +176,8 @@ docker_run_gnu() {
             /tmp/builder/bin/release \
                 --out "/workspace/output/libdatadog-${BUILDER_PLATFORM}" \
                 --target "${BUILDER_TARGET}"
+            sh tools/build-ffi.sh "${BUILDER_TARGET}" "${BUILDER_PROFILE}" \
+                "/workspace/output/libdatadog-${BUILDER_PLATFORM}"
         '
 }
 
@@ -167,6 +196,7 @@ docker_run_musl() {
         -v "$HOME/.cargo/registry:/root/.cargo/registry" \
         -v "$HOME/.cargo/git:/root/.cargo/git" \
         -v "$SCRIPT_DIR:/workspace" \
+        "${DOCKER_LIBDATADOG_MOUNT[@]}" \
         -w /workspace \
         -e CARGO_HOME=/root/.cargo \
         -e BUILDER_VERSION="$VERSION" \
@@ -182,8 +212,7 @@ docker_run_musl() {
             # binary without interference from any RUSTFLAGS overrides.
             unset CARGO_ENCODED_RUSTFLAGS
             cargo install \
-                --git https://github.com/DataDog/libdatadog \
-                --tag "v${BUILDER_VERSION}" \
+                --path /workspace/libdatadog/builder \
                 --bin release \
                 --root /tmp/builder \
                 --no-default-features \
@@ -227,6 +256,8 @@ docker_run_musl() {
             /tmp/builder/bin/release \
                 --out "/workspace/output/libdatadog-${BUILDER_PLATFORM}" \
                 --target "${BUILDER_TARGET}"
+            sh tools/build-ffi.sh "${BUILDER_TARGET}" "${BUILDER_PROFILE}" \
+                "/workspace/output/libdatadog-${BUILDER_PLATFORM}"
         '
 }
 
@@ -266,8 +297,7 @@ case "$TARGET" in
         # handles cross-compilation internally (e.g. x86_64 on an arm64 runner).
         unset CARGO_BUILD_TARGET
         cargo install \
-            --git https://github.com/DataDog/libdatadog \
-            --tag "v${VERSION}" \
+            --path libdatadog/builder \
             --bin release \
             --root .builder \
             --no-default-features \
@@ -298,6 +328,7 @@ case "$TARGET" in
         .builder/bin/release \
             --out "$PACKAGE_DIR" \
             --target "$TARGET"
+        sh tools/build-ffi.sh "$TARGET" "$PROFILE" "$PACKAGE_DIR"
         ;;
     *)
         echo "Error: unsupported target '$TARGET'" >&2

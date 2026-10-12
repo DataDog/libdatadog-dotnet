@@ -29,3 +29,6 @@ desktop.ini
 .claude/settings.local.json
 /output-test
 libdatadog/.claude/settings.local.json
+
+# libdatadog sources (checked out by the build scripts, or a symlink to a local checkout)
+/libdatadog
