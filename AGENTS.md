@@ -144,6 +144,7 @@ Output lands in `output/libdatadog-<platform>/`. For aarch64 Linux targets you n
 
 ## Recent Changes (Reverse Chronological)
 
+- **2026-10**: Bumped to libdatadog v45 (from v38). Rust toolchain pin still `1.87.0` (v45's MSRV). The profiling, crashtracker and library-config headers are source compatible with v38 (only additions), so dd-trace-dotnet's native profiler builds unchanged; the musl builds import a few more libc symbols.
 - **2026-07**: Bumped to libdatadog v38 (from v36). Rust toolchain pin already at `1.87.0`, which matches v38's MSRV, so no toolchain change was needed.
 - **2026-06**: Bumped to libdatadog v36 (from v32). Rust toolchain pin already at `1.87.0`, which matches v36's MSRV, so no toolchain change was needed.
 - **2026-05**: aarch64-gnu switched from cross-rs cross-compile to QEMU + native manylinux2014_aarch64. Necessary because libdd-libunwind-sys (v30) can't be cross-compiled.
