@@ -32,13 +32,16 @@
 param(
     [string]$Platform = "x64-windows",
     [string]$OutputDir = "output",
-    [string]$Features = "profiling,crashtracker,symbolizer,library-config",
     [switch]$Clean,
     # Build from a local libdatadog checkout instead of the revision in datadog-dotnet-ffi/Cargo.toml
     [string]$LibdatadogPath = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+# Builder crate features: which FFI modules (headers etc.) the package contains. Must match the
+# libdd-profiling-ffi features in datadog-dotnet-ffi/Cargo.toml, which the shipped library is built with.
+$Features = "profiling,crashtracker,symbolizer,library-config"
 
 # Resolve target triple from platform name
 $TargetMap = @{
@@ -74,8 +77,9 @@ $OutputDir = (Resolve-Path $OutputDir).Path
 $PackageDir = Join-Path $OutputDir "libdatadog-$Platform"
 
 # A local libdatadog checkout replaces the libdatadog dependencies of datadog-dotnet-ffi via a
-# cargo [patch] (passed with --config), and with them the libdatadog sources found below.
-$CargoConfig = @()
+# cargo [patch] (passed with --config), and with them the libdatadog sources found below. Otherwise
+# the committed Cargo.lock is used as is.
+$CargoArgs = @("--locked")
 if ($LibdatadogPath) {
     $LibdatadogPath = (Resolve-Path $LibdatadogPath).Path
     $Patch = Join-Path $PWD "target/libdatadog-patch.toml"
@@ -84,14 +88,14 @@ if ($LibdatadogPath) {
         ForEach-Object { $_.Matches[0].Groups[1].Value } | Sort-Object -Unique
     @('[patch."https://github.com/DataDog/libdatadog"]') + ($Crates | ForEach-Object { "$_ = { path = '$(Join-Path $LibdatadogPath $_)' }" }) |
         Set-Content -Encoding ascii $Patch
-    $CargoConfig = @("--config", $Patch)
+    $CargoArgs = @("--config", $Patch)
 }
 
 # The libdatadog sources datadog-dotnet-ffi is built from: cargo's checkout of its libdatadog
 # dependencies, or the local checkout.  The builder is installed from there, so that the
 # headers etc. match the library.
 $HostTriple = (rustc -vV 2>&1 | Where-Object { $_ -match "^host:" }) -replace "^host:\s*", ""
-$Metadata = cargo metadata --format-version 1 --filter-platform $HostTriple @CargoConfig | ConvertFrom-Json
+$Metadata = cargo metadata --format-version 1 --filter-platform $HostTriple @CargoArgs | ConvertFrom-Json
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Error: cargo metadata failed" -ForegroundColor Red
     exit 1
@@ -176,16 +180,15 @@ $ReleaseOut = Invoke-Builder -BuildProfile "release"
 $DebugOut   = Invoke-Builder -BuildProfile "debug"
 
 # Build datadog-dotnet-ffi, which replaces the profiling DLL.  The PDB path embedded in the
-# DLL already gets the final name.  Uses the dependency versions libdatadog is tested with.
+# DLL already gets the final name.
 # Not in the builder's target directory: some libdatadog crates have library file names without
 # a hash, which the builder's and this build would overwrite for each other.
-Copy-Item -Path (Join-Path $LibdatadogDir "Cargo.lock") -Destination (Join-Path $PWD "Cargo.lock") -Force
 $FfiTargetDir = Join-Path $CargoTargetDir "dotnet-ffi"
 $env:CARGO_TARGET_DIR = $FfiTargetDir
 $env:RUSTFLAGS = "-C relocation-model=pic -C target-feature=+crt-static -C link-arg=/PDBALTPATH:datadog_profiling_ffi.pdb"
 foreach ($p in @("release", "debug")) {
     $cargoProfile = if ($p -eq "debug") { "dev" } else { $p }
-    cargo build -p datadog-dotnet-ffi --target $Target --profile $cargoProfile @CargoConfig
+    cargo build -p datadog-dotnet-ffi --target $Target --profile $cargoProfile @CargoArgs
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Error: building datadog-dotnet-ffi ($p) failed" -ForegroundColor Red
         exit 1

@@ -33,7 +33,7 @@ To upgrade the upstream libdatadog version, change the `tag` (e.g. `tag = "v32.0
 
 ### Features
 
-Built with the comma-separated feature set the .NET tracer needs (see `build.ps1` / workflow inputs):
+Built with the fixed feature set the .NET tracer needs (`FEATURES` in `build.sh` / `build.ps1`, matching the `libdd-profiling-ffi` features in `datadog-dotnet-ffi/Cargo.toml`):
 
 ```
 profiling,crashtracker,symbolizer,library-config
@@ -60,7 +60,7 @@ The builder handles the FFI cargo build, header generation (cbindgen + dedup), l
 
 The shared library itself (`libdatadog_profiling.{so,dylib}`, `datadog_profiling_ffi.dll`) comes from `datadog-dotnet-ffi`, this repository's crate: it re-exports libdatadog's profiling FFI (with the same features) and adds .NET specific FFI, like the remote configuration client (`ddog_rc_*`). It keeps the library name, so it's a drop-in replacement for the C++ profiler and the tracer. Only the .NET tracer uses the additional exports, so there are no headers for them.
 
-To build against a local libdatadog checkout, pass `--libdatadog-path ../libdatadog` (`-LibdatadogPath` on Windows): the libdatadog dependencies of `datadog-dotnet-ffi` are then patched to it, so the builder comes from there too.
+To build against a local libdatadog checkout, pass `--libdatadog-path ../libdatadog` (`-LibdatadogPath` on Windows): the libdatadog dependencies of `datadog-dotnet-ffi` are then patched to it, so the builder comes from there too. This changes `Cargo.lock` locally; don't commit that.
 
 **Windows quirk**: the builder produces a flat `lib/datadog_profiling.{dll,lib,pdb}` layout, but dd-trace-dotnet's vcpkg portfile expects the legacy `release/{dynamic,static}` + `debug/{dynamic,static}` tree with `_ffi`-suffixed filenames. `build.ps1` runs the builder twice (release + debug) and reassembles that layout from cargo's raw `target/` output.
 

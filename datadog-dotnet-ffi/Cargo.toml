@@ -28,7 +28,7 @@ libdd-common = { git = "https://github.com/DataDog/libdatadog", rev = "685129370
 libdd-common-ffi = { git = "https://github.com/DataDog/libdatadog", rev = "6851293707e6b777b0dde428a13940b2293a8434", default-features = false, features = ["std"] }
 libdd-remote-config = { git = "https://github.com/DataDog/libdatadog", rev = "6851293707e6b777b0dde428a13940b2293a8434", default-features = false, features = ["client"] }
 # Must be the feature list the libdatadog builder computes for the libdatadog-dotnet builder
-# features (profiling,crashtracker,symbolizer,library-config), see builder/src/features.rs.
+# features (FEATURES in build.sh / build.ps1), see builder/src/features.rs.
 libdd-profiling-ffi = { git = "https://github.com/DataDog/libdatadog", rev = "6851293707e6b777b0dde428a13940b2293a8434", default-features = false, features = [
   "ddcommon-ffi",
   "catch_panic",

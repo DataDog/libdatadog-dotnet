@@ -52,9 +52,19 @@ detect an MSRV change.
 
 Set `tag = "v<TARGET>"` (replacing `tag = ...` or `rev = ...`) on **every**
 libdatadog git dependency in `datadog-dotnet-ffi/Cargo.toml` — they must all
-use the same version — and update the comment above them. Then make sure it
-still builds (`cargo test -p datadog-dotnet-ffi`), and that the
-`libdd-profiling-ffi` feature list still matches `builder/src/features.rs`.
+use the same version — and update the comment above them.
+
+Then update `Cargo.lock` (committed, the builds use `--locked`) to libdatadog's
+dependency versions at that tag, which also makes sure it still builds:
+
+```bash
+cargo metadata --format-version 1 > /dev/null    # resolves the new revision
+cp "$(sh tools/libdatadog.sh dir)/Cargo.lock" Cargo.lock
+cargo test -p datadog-dotnet-ffi                 # adds our own dependencies on top
+```
+
+Also check that the `libdd-profiling-ffi` feature list still matches
+`builder/src/features.rs`.
 
 ### Step 3: Check upstream Rust MSRV; update the pin if changed
 
@@ -95,6 +105,7 @@ Then update **all** of these from the old MSRV to the target MSRV:
 - `tools/docker/Dockerfile.musl-x64` — `ARG RUST_VERSION`
 - `tools/docker/Dockerfile.musl-aarch64` — `ARG RUST_VERSION`
 - `README.md` — the prerequisites line
+- `datadog-dotnet-ffi/Cargo.toml` — `rust-version`
 
 Keep this in the **same commit** as the libdatadog bump — the two are
 coupled (building the new version with the old toolchain is exactly the
@@ -147,8 +158,9 @@ side, **not** a precondition that blocks the bump here.
 
 ## Notes
 
-- Feature set is **not** part of a version bump — leave `FEATURES` / `Features`
-  / workflow `features` defaults alone unless the user explicitly asks.
+- Feature set is **not** part of a version bump — leave `FEATURES` / `$Features`
+  (and the matching `libdd-profiling-ffi` features) alone unless the user
+  explicitly asks.
 - The `curl` commands need network access but no auth or extra tooling (they
   hit public release/raw endpoints). If `curl` is unavailable, `wget -qO-` works
   with the same URLs.

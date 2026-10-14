@@ -12,8 +12,15 @@ set -e
 
 cd "$(dirname "$0")/.."
 
+# The committed Cargo.lock, unless patched to a local libdatadog checkout (see build.sh)
+if [ -n "$LIBDATADOG_PATCH" ]; then
+    CARGO_ARGS="--config $LIBDATADOG_PATCH"
+else
+    CARGO_ARGS="--locked"
+fi
+
 HOST=$(rustc -vV | sed -n 's/^host: //p')
-DIR=$(cargo metadata --format-version 1 --filter-platform "$HOST" ${LIBDATADOG_PATCH:+--config "$LIBDATADOG_PATCH"} |
+DIR=$(cargo metadata --format-version 1 --filter-platform "$HOST" $CARGO_ARGS |
     grep -o '"manifest_path":"[^"]*/libdd-profiling-ffi/Cargo.toml"' |
     sed 's|^"manifest_path":"\(.*\)/libdd-profiling-ffi/Cargo.toml"$|\1|')
 if [ -z "$DIR" ]; then

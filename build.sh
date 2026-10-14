@@ -16,7 +16,6 @@ set -e
 PLATFORM=""
 OUTPUT_DIR="output"
 PROFILE="release"
-FEATURES=""
 CLEAN=false
 LIBDATADOG_PATH=""
 
@@ -25,7 +24,6 @@ while [[ $# -gt 0 ]]; do
         --platform) PLATFORM="$2"; shift 2 ;;
         --output)   OUTPUT_DIR="$2"; shift 2 ;;
         --profile)  PROFILE="$2"; shift 2 ;;
-        --features) FEATURES="$2"; shift 2 ;;
         --clean)    CLEAN=true; shift ;;
         --libdatadog-path) LIBDATADOG_PATH="$2"; shift 2 ;;
         -h|--help)
@@ -35,9 +33,6 @@ while [[ $# -gt 0 ]]; do
             echo "  --platform PLATFORM  Target platform / output directory suffix"
             echo "  --output DIR         Output directory (default: output)"
             echo "  --profile PROFILE    Build profile: debug or release (default: release)"
-            echo "  --features FEATURES  Comma-separated builder crate features"
-            echo "                       (default: profiling,crashtracker,"
-            echo "                                symbolizer,library-config)"
             echo "  --clean              Remove output directory before building"
             echo "  --libdatadog-path P  Build from a local libdatadog checkout instead of"
             echo "                       the revision in datadog-dotnet-ffi/Cargo.toml"
@@ -65,11 +60,10 @@ TARGET="${CARGO_BUILD_TARGET:-$PLATFORM}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Builder crate features compiled into the release binary.
-# These control which FFI modules are included in the output library.
-# Feature names map to flags in builder/src/bin/release.rs in libdatadog.
-# Override via --features on the command line.
-FEATURES="${FEATURES:-profiling,crashtracker,symbolizer,library-config}"
+# Builder crate features: which FFI modules (headers etc.) the package contains. Feature names map
+# to flags in builder/src/bin/release.rs in libdatadog. Must match the libdd-profiling-ffi features
+# in datadog-dotnet-ffi/Cargo.toml, which the shipped library is built with.
+FEATURES="profiling,crashtracker,symbolizer,library-config"
 
 if [[ "$CLEAN" == true ]]; then
     rm -rf "$OUTPUT_DIR"

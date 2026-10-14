@@ -10,11 +10,6 @@ name: Build Platform
 on:
   workflow_call:
     inputs:
-      features:
-        description: 'Comma-separated builder crate features (e.g. profiling,crashtracker,symbolizer,library-config)'
-        required: false
-        type: string
-        default: 'profiling,crashtracker,symbolizer,library-config'
       verify_artifacts:
         description: 'Whether to verify build artifacts after building'
         required: false
@@ -91,7 +86,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('datadog-dotnet-ffi/Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
@@ -109,10 +104,10 @@ jobs:
           CARGO_BUILD_TARGET: ${{ matrix.target }}
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
-            pwsh -Command "./build.ps1 -Platform '${{ matrix.platform }}' -Features '${{ inputs.features }}' -Clean"
+            pwsh -Command "./build.ps1 -Platform '${{ matrix.platform }}' -Clean"
           else
             chmod +x build.sh
-            ./build.sh --platform "${{ matrix.platform }}" --features "${{ inputs.features }}" --clean
+            ./build.sh --platform "${{ matrix.platform }}" --clean
           fi
         shell: bash
 
