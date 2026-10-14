@@ -12,6 +12,7 @@
 use function_name::named;
 use libdd_capabilities_impl::{HttpClientCapability, NativeCapabilities};
 use libdd_common::Endpoint;
+use libdd_common_ffi::handle::{Handle, ToInner};
 use libdd_common_ffi::slice::{AsBytes, CharSlice, Slice};
 use libdd_common_ffi::{VoidResult, wrap_with_void_ffi_result};
 use libdd_remote_config::fetch::{
@@ -24,7 +25,7 @@ use libdd_remote_config::{
 };
 use std::ffi::c_void;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 use strum::IntoEnumIterator;
 use tokio_util::sync::CancellationToken;
@@ -44,7 +45,7 @@ impl ParseFile for SharedBytesParser {
 type File = RawFile<Arc<Vec<u8>>>;
 type Fetcher = SingleFetcher<RawFileStorage<SharedBytesParser>, NativeCapabilities>;
 
-struct RcClientInner {
+pub struct RcClient {
     runtime: tokio::runtime::Runtime,
     /// Only None while being replaced by a new instance, see [`RcClient::rebind`].
     fetcher: Option<Fetcher>,
@@ -52,19 +53,14 @@ struct RcClientInner {
     tracker: ChangeTracker<File>,
 }
 
+// The tracer uses a client from whichever thread polls, one at a time
+const _: fn() = || {
+    fn assert_send<T: Send>() {}
+    assert_send::<RcClient>();
+};
+
 fn fetcher_lost() -> anyhow::Error {
     anyhow::anyhow!("The remote config client is unusable after a failed rebind")
-}
-
-impl RcClientInner {
-    fn fetcher(&mut self) -> anyhow::Result<&mut Fetcher> {
-        self.fetcher.as_mut().ok_or_else(fetcher_lost)
-    }
-}
-
-pub struct RcClient {
-    inner: Mutex<RcClientInner>,
-    cancel: CancellationToken,
 }
 
 #[repr(C)]
@@ -237,45 +233,39 @@ impl RcClient {
         )
         .with_client_id(to_string(config.client_id)?);
         Ok(RcClient {
-            inner: Mutex::new(RcClientInner {
-                runtime,
-                fetcher: Some(fetcher),
-                tracker: ChangeTracker::default(),
-            }),
-            cancel: CancellationToken::new(),
+            runtime,
+            fetcher: Some(fetcher),
+            tracker: ChangeTracker::default(),
         })
     }
 
-    fn lock(&self) -> anyhow::Result<std::sync::MutexGuard<'_, RcClientInner>> {
-        self.inner
-            .lock()
-            .map_err(|_| anyhow::anyhow!("The remote config client is unusable after a panic"))
+    fn fetcher(&mut self) -> anyhow::Result<&mut Fetcher> {
+        self.fetcher.as_mut().ok_or_else(fetcher_lost)
     }
 
     /// Replaces the fetcher with a new instance for `target` and `endpoint` (if any, otherwise the
     /// current one), which takes over the known files of the previous one.
-    fn rebind(&self, target: Target, endpoint: Option<Endpoint>) -> anyhow::Result<()> {
-        let mut guard = self.lock()?;
-        let inner = &mut *guard;
-        let previous = inner.fetcher.take().ok_or_else(fetcher_lost)?;
-        inner.fetcher = Some(inner.runtime.block_on(previous.rebind(target, endpoint))?);
+    fn rebind(&mut self, target: Target, endpoint: Option<Endpoint>) -> anyhow::Result<()> {
+        let previous = self.fetcher.take().ok_or_else(fetcher_lost)?;
+        self.fetcher = Some(self.runtime.block_on(previous.rebind(target, endpoint))?);
         Ok(())
     }
 
-    fn fetch(&self) -> anyhow::Result<ChangesBatch> {
-        let mut guard = self.lock()?;
-        let RcClientInner {
+    fn fetch(&mut self, cancel: Option<&CancellationToken>) -> anyhow::Result<ChangesBatch> {
+        let RcClient {
             runtime,
             fetcher,
             tracker,
-        } = &mut *guard;
+        } = self;
         let fetcher = fetcher.as_mut().ok_or_else(fetcher_lost)?;
-        let cancel = &self.cancel;
         let files = runtime.block_on(async {
-            tokio::select! {
-                biased;
-                _ = cancel.cancelled() => anyhow::bail!("The remote config client was cancelled"),
-                files = fetcher.fetch_once() => files,
+            match cancel {
+                Some(cancel) => tokio::select! {
+                    biased;
+                    _ = cancel.cancelled() => anyhow::bail!("The remote config fetch was cancelled"),
+                    files = fetcher.fetch_once() => files,
+                },
+                None => fetcher.fetch_once().await,
             }
         })?;
 
@@ -328,13 +318,6 @@ pub unsafe extern "C" fn ddog_rc_client_drop(client: *mut RcClient) {
     }
 }
 
-/// Aborts an ongoing fetch and makes all further fetches fail immediately. May be called from
-/// any thread, e.g. while shutting down.
-#[unsafe(no_mangle)]
-pub extern "C" fn ddog_rc_client_cancel(client: &RcClient) {
-    client.cancel.cancel();
-}
-
 /// Switches to another target (service, env, version, tags) and, if `endpoint` is not null,
 /// another agent endpoint (which is copied), with a new fetcher instance (and client session)
 /// taking over the known files. Unchanged files are neither downloaded again nor reported as
@@ -346,7 +329,7 @@ pub extern "C" fn ddog_rc_client_cancel(client: &RcClient) {
 #[must_use]
 #[named]
 pub unsafe extern "C" fn ddog_rc_client_rebind(
-    client: &RcClient,
+    client: &mut RcClient,
     target: &RcTarget,
     endpoint: Option<&Endpoint>,
 ) -> VoidResult {
@@ -365,14 +348,13 @@ pub unsafe extern "C" fn ddog_rc_client_rebind(
 #[must_use]
 #[named]
 pub unsafe extern "C" fn ddog_rc_client_set_products(
-    client: &RcClient,
+    client: &mut RcClient,
     products: Slice<CharSlice>,
     capabilities: u64,
 ) -> VoidResult {
     wrap_with_void_ffi_result!({
         let (products, unknown) = to_products(products)?;
         client
-            .lock()?
             .fetcher()?
             .set_product_capabilities(products, to_capabilities(capabilities));
         report_unknown_products(unknown)?;
@@ -387,26 +369,33 @@ pub unsafe extern "C" fn ddog_rc_client_set_products(
 #[must_use]
 #[named]
 pub unsafe extern "C" fn ddog_rc_client_set_extra_services(
-    client: &RcClient,
+    client: &mut RcClient,
     services: Slice<CharSlice>,
 ) -> VoidResult {
     wrap_with_void_ffi_result!({
         let services = to_strings(services)?;
-        client.lock()?.fetcher()?.set_extra_services(services);
+        client.fetcher()?.set_extra_services(services);
     })
 }
 
-/// Polls the agent once, blocking until the response is processed or the request timed out.
+/// Polls the agent once, blocking until the response is processed, the request timed out, or
+/// `cancel` is cancelled. To cancel from another thread, e.g. on shutdown, pass a token from
+/// `ddog_CancellationToken_new` here and cancel a clone of it (`ddog_CancellationToken_clone`).
 /// On success, `out_changes` must be released with [`ddog_rc_changes_drop`].
+///
+/// # Safety
+/// `cancel` must be null or a valid token.
 #[unsafe(no_mangle)]
 #[must_use]
 #[named]
-pub extern "C" fn ddog_rc_client_fetch(
-    client: &RcClient,
+pub unsafe extern "C" fn ddog_rc_client_fetch(
+    client: &mut RcClient,
+    mut cancel: *mut Handle<CancellationToken>,
     out_changes: &mut RcChanges,
 ) -> VoidResult {
     wrap_with_void_ffi_result!({
-        *out_changes = client.fetch()?.into_ffi();
+        let cancel = unsafe { cancel.to_inner_mut() }.ok();
+        *out_changes = client.fetch(cancel.as_deref())?.into_ffi();
     })
 }
 
@@ -419,7 +408,7 @@ pub extern "C" fn ddog_rc_client_fetch(
 #[must_use]
 #[named]
 pub unsafe extern "C" fn ddog_rc_client_set_apply_state(
-    client: &RcClient,
+    client: &mut RcClient,
     path: CharSlice,
     state: u32,
     error: CharSlice,
@@ -432,7 +421,7 @@ pub unsafe extern "C" fn ddog_rc_client_set_apply_state(
             3 => ConfigApplyState::Error(to_string(error)?),
             _ => anyhow::bail!("Invalid apply state {state}"),
         };
-        client.lock()?.fetcher()?.set_config_state(&path, state);
+        client.fetcher()?.set_config_state(&path, state);
     })
 }
 
@@ -540,8 +529,10 @@ mod tests {
             self.set_products(&["APM_TRACING"]).unwrap();
         }
 
-        fn client(&self) -> &RcClient {
-            unsafe { &*self.client }
+        // The tests only use one reference at a time
+        #[allow(clippy::mut_from_ref)]
+        fn client(&self) -> &mut RcClient {
+            unsafe { &mut *self.client }
         }
 
         fn add_file(&self, id: &str, services: &[&str], contents: &str) {
@@ -566,7 +557,8 @@ mod tests {
         /// Returns (kind, path, contents) and releases everything.
         fn fetch(&self) -> Vec<(u32, String, Option<String>)> {
             let mut changes = RcChanges::default();
-            ddog_rc_client_fetch(self.client(), &mut changes).unwrap();
+            unsafe { ddog_rc_client_fetch(self.client(), std::ptr::null_mut(), &mut changes) }
+                .unwrap();
             let result = unsafe { std::slice::from_raw_parts(changes.ptr, changes.len) }
                 .iter()
                 .map(|c| unsafe {
@@ -750,7 +742,8 @@ mod tests {
         fixture.add_file("a", &["first"], "contents");
 
         let mut changes = RcChanges::default();
-        ddog_rc_client_fetch(fixture.client(), &mut changes).unwrap();
+        unsafe { ddog_rc_client_fetch(fixture.client(), std::ptr::null_mut(), &mut changes) }
+            .unwrap();
         let change = unsafe { &*changes.ptr };
         let (ptr, len, owner) = (
             change.contents_ptr,
@@ -768,15 +761,46 @@ mod tests {
 
     #[test]
     #[cfg_attr(miri, ignore)]
-    fn cancelled_client_fails_fast() {
+    fn cancelled_fetch_fails_fast() {
         let mut fixture = Fixture::new();
         // Nothing listens there: the fetch would otherwise fail by itself
         fixture.create("http://127.0.0.1:1").unwrap();
-        ddog_rc_client_cancel(fixture.client());
+        let token = CancellationToken::new();
+        token.cancel();
+        let mut handle: Handle<CancellationToken> = token.into();
         let mut changes = RcChanges::default();
-        let VoidResult::Err(err) = ddog_rc_client_fetch(fixture.client(), &mut changes) else {
+        let VoidResult::Err(err) =
+            (unsafe { ddog_rc_client_fetch(fixture.client(), &mut handle, &mut changes) })
+        else {
             panic!("expected an error");
         };
         assert!(err.as_ref().contains("cancelled"), "{}", err.as_ref());
+        drop(unsafe { handle.take() });
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn cancel_aborts_an_ongoing_fetch() {
+        let mut fixture = Fixture::new();
+        // Accepts connections (in its backlog), but never responds
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/", listener.local_addr().unwrap());
+        fixture.create(&url).unwrap();
+        let token = CancellationToken::new();
+        let clone = token.clone();
+        let canceller = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(200));
+            clone.cancel();
+        });
+        let mut handle: Handle<CancellationToken> = token.into();
+        let mut changes = RcChanges::default();
+        let VoidResult::Err(err) =
+            (unsafe { ddog_rc_client_fetch(fixture.client(), &mut handle, &mut changes) })
+        else {
+            panic!("expected an error");
+        };
+        assert!(err.as_ref().contains("cancelled"), "{}", err.as_ref());
+        canceller.join().unwrap();
+        drop(unsafe { handle.take() });
     }
 }
