@@ -29,7 +29,7 @@ A thin packaging layer over upstream libdatadog. Ships only the FFI components t
 
 Output lands in `output/libdatadog-<platform>/`.
 
-To upgrade the upstream libdatadog version, edit the `LIBDATADOG_VERSION` file (e.g. `32.0.0` — no `v` prefix). This is the upstream libdatadog version, distinct from libdatadog-dotnet's own release tag (e.g. `v1.3.5`) that `dd-trace-dotnet` pins. The chosen version must be API-compatible with `dd-trace-dotnet`'s native profiler C++ (it calls libdatadog's profiling FFI); otherwise the tracer's C++ build fails on missing identifiers like `ddog_prof_SampleType`. It's a coordinated change — bump + release here, then the tracer adopts the new release and builds against its profiling headers in the same rollout.
+To upgrade the upstream libdatadog version, change the `tag` (e.g. `tag = "v32.0.0"`; or `rev` for an unreleased commit) of all libdatadog dependencies in `datadog-dotnet-ffi/Cargo.toml`. This is the upstream libdatadog version, distinct from libdatadog-dotnet's own release tag (e.g. `v1.3.5`) that `dd-trace-dotnet` pins. The chosen version must be API-compatible with `dd-trace-dotnet`'s native profiler C++ (it calls libdatadog's profiling FFI); otherwise the tracer's C++ build fails on missing identifiers like `ddog_prof_SampleType`. It's a coordinated change — bump + release here, then the tracer adopts the new release and builds against its profiling headers in the same rollout.
 
 ### Features
 
@@ -43,12 +43,11 @@ These are the builder-crate feature flags upstream libdatadog exposes — names 
 
 ## How It Works
 
-We check out libdatadog at the pinned tag (into `libdatadog/`), install its own `release` binary (from its `builder` crate), let it produce the package, and then replace the package's shared library with our own build:
+We install libdatadog's own `release` binary (from its `builder` crate) from cargo's checkout of the pinned libdatadog revision (`tools/libdatadog.sh dir`), let it produce the package, and then replace the package's shared library with our own build:
 
 ```
-git clone --depth 1 --branch "v${LIBDATADOG_VERSION}" https://github.com/DataDog/libdatadog libdatadog
 cargo install \
-    --path libdatadog/builder \
+    --path "$(tools/libdatadog.sh dir)/builder" \
     --bin release \
     --no-default-features \
     --features "<feature-list>" \
@@ -61,7 +60,7 @@ The builder handles the FFI cargo build, header generation (cbindgen + dedup), l
 
 The shared library itself (`libdatadog_profiling.{so,dylib}`, `datadog_profiling_ffi.dll`) comes from `datadog-dotnet-ffi`, this repository's crate: it re-exports libdatadog's profiling FFI (with the same features) and adds .NET specific FFI, like the remote configuration client (`ddog_rc_*`). It keeps the library name, so it's a drop-in replacement for the C++ profiler and the tracer. Only the .NET tracer uses the additional exports, so there are no headers for them.
 
-`datadog-dotnet-ffi` depends on libdatadog's crates by git revision (see `datadog-dotnet-ffi/Cargo.toml`), so it builds on its own; this can be a commit on top of the tag with unreleased changes. To run the builder from a local libdatadog checkout instead of the tag, pass `--libdatadog-path ../libdatadog` (`-LibdatadogPath` on Windows); to build `datadog-dotnet-ffi` against it, add a `[patch."https://github.com/DataDog/libdatadog"]` section with path dependencies.
+To build against a local libdatadog checkout, pass `--libdatadog-path ../libdatadog` (`-LibdatadogPath` on Windows): the libdatadog dependencies of `datadog-dotnet-ffi` are then patched to it, so the builder comes from there too.
 
 **Windows quirk**: the builder produces a flat `lib/datadog_profiling.{dll,lib,pdb}` layout, but dd-trace-dotnet's vcpkg portfile expects the legacy `release/{dynamic,static}` + `debug/{dynamic,static}` tree with `_ffi`-suffixed filenames. `build.ps1` runs the builder twice (release + debug) and reassembles that layout from cargo's raw `target/` output.
 
@@ -87,7 +86,7 @@ Manual dispatch: **Actions → Release → Run workflow**. The workflow builds a
 | `version_increment` | `patch` | `patch` / `minor` / `major` — ignored if `release_version` is set |
 | `release_version` | _(empty)_ | Manual override, e.g. `v1.4.0` |
 
-The upstream libdatadog version isn't a workflow input — it's pinned in the `LIBDATADOG_VERSION` file at the time of the release commit.
+The upstream libdatadog version isn't a workflow input — it's pinned by the libdatadog dependencies in `datadog-dotnet-ffi/Cargo.toml` at the time of the release commit.
 
 For CI runs without publishing a release, use the **Build** workflow (auto-triggered on every PR and push to `main`).
 

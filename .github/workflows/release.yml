@@ -211,7 +211,7 @@ jobs:
           cat > release-notes.md << 'NOTES_EOF'
           ## Build Information
 
-          - **Libdatadog version**: see `LIBDATADOG_VERSION` in this repository
+          - **Libdatadog version**: see the libdatadog dependencies in `datadog-dotnet-ffi/Cargo.toml` in this repository
 
           ## Checksums
 

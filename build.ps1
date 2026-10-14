@@ -7,7 +7,7 @@
 # Copyright 2025-present Datadog, Inc.
 
 # Build script for libdatadog-dotnet on Windows.
-# The libdatadog version is controlled by the LIBDATADOG_VERSION file.
+# The libdatadog revision is pinned by the libdatadog dependencies in datadog-dotnet-ffi/Cargo.toml.
 #
 # Produces a Windows zip with the legacy layout the .NET tracer's vcpkg
 # portfile and runtime DLL loader still expect:
@@ -34,7 +34,7 @@ param(
     [string]$OutputDir = "output",
     [string]$Features = "profiling,crashtracker,symbolizer,library-config",
     [switch]$Clean,
-    # Build from a local libdatadog checkout instead of the tag in LIBDATADOG_VERSION
+    # Build from a local libdatadog checkout instead of the revision in datadog-dotnet-ffi/Cargo.toml
     [string]$LibdatadogPath = ""
 )
 
@@ -53,15 +53,11 @@ $Target = if ($env:CARGO_BUILD_TARGET) {
     $Platform
 }
 
-# Read the libdatadog version.  Update LIBDATADOG_VERSION to upgrade.
-$Version = (Get-Content LIBDATADOG_VERSION).Trim()
-
 Write-Host "Building libdatadog-dotnet" -ForegroundColor Cyan
 Write-Host "  Platform : $Platform" -ForegroundColor Gray
 Write-Host "  Target   : $Target" -ForegroundColor Gray
 Write-Host "  Features : $Features" -ForegroundColor Gray
 Write-Host "  Output   : $OutputDir" -ForegroundColor Gray
-Write-Host "  Version  : $Version" -ForegroundColor Gray
 
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
     Write-Host "Error: cargo not found. Install Rust from https://rustup.rs/" -ForegroundColor Red
@@ -77,28 +73,37 @@ New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 $OutputDir = (Resolve-Path $OutputDir).Path
 $PackageDir = Join-Path $OutputDir "libdatadog-$Platform"
 
-# The libdatadog sources the builder is installed from: either a checkout of the release
-# tag, or a junction to a local checkout.
-$LibdatadogDir = Join-Path $PWD "libdatadog"
-$LibdatadogItem = Get-Item $LibdatadogDir -ErrorAction SilentlyContinue
-$IsLink = $LibdatadogItem -and $LibdatadogItem.LinkType
+# A local libdatadog checkout replaces the libdatadog dependencies of datadog-dotnet-ffi via a
+# cargo [patch] (passed with --config), and with them the libdatadog sources found below.
+$CargoConfig = @()
 if ($LibdatadogPath) {
-    if ($LibdatadogItem -and -not $IsLink) {
-        Write-Host "Error: $LibdatadogDir exists and is not a link, remove it to use -LibdatadogPath" -ForegroundColor Red
-        exit 1
-    }
-    if ($IsLink) { $LibdatadogItem.Delete() }
-    New-Item -ItemType Junction -Path $LibdatadogDir -Target (Resolve-Path $LibdatadogPath).Path | Out-Null
-} elseif ($IsLink) {
-    Write-Host "Error: $LibdatadogDir links to a local checkout, pass -LibdatadogPath or remove it" -ForegroundColor Red
-    exit 1
-} elseif (-not $LibdatadogItem) {
-    git clone --quiet --depth 1 --branch "v${Version}" https://github.com/DataDog/libdatadog $LibdatadogDir
-    if ($LASTEXITCODE -ne 0) { Write-Host "Error: git clone failed" -ForegroundColor Red; exit 1 }
-} elseif ((git -C $LibdatadogDir describe --tags --exact-match 2>$null) -ne "v${Version}") {
-    Write-Host "Error: $LibdatadogDir is not a checkout of v${Version}, remove it to check out the right version" -ForegroundColor Red
+    $LibdatadogPath = (Resolve-Path $LibdatadogPath).Path
+    $Patch = Join-Path $PWD "target/libdatadog-patch.toml"
+    New-Item -ItemType Directory -Force -Path (Split-Path $Patch) | Out-Null
+    $Crates = Select-String -Path datadog-dotnet-ffi/Cargo.toml -Pattern '^([a-z0-9-]+) = \{ git = "https://github.com/DataDog/libdatadog"' |
+        ForEach-Object { $_.Matches[0].Groups[1].Value } | Sort-Object -Unique
+    @('[patch."https://github.com/DataDog/libdatadog"]') + ($Crates | ForEach-Object { "$_ = { path = '$(Join-Path $LibdatadogPath $_)' }" }) |
+        Set-Content -Encoding ascii $Patch
+    $CargoConfig = @("--config", $Patch)
+}
+
+# The libdatadog sources datadog-dotnet-ffi is built from: cargo's checkout of its libdatadog
+# dependencies, or the local checkout.  The builder is installed from there, so that the
+# headers etc. match the library.
+$HostTriple = (rustc -vV 2>&1 | Where-Object { $_ -match "^host:" }) -replace "^host:\s*", ""
+$Metadata = cargo metadata --format-version 1 --filter-platform $HostTriple @CargoConfig | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Error: cargo metadata failed" -ForegroundColor Red
     exit 1
 }
+$ProfilingFfi = $Metadata.packages | Where-Object { $_.name -eq "libdd-profiling-ffi" } | Select-Object -First 1
+$LibdatadogDir = Split-Path (Split-Path $ProfilingFfi.manifest_path)
+if ((Get-Content (Join-Path $LibdatadogDir "Cargo.toml") -Raw) -notmatch '(?ms)^\[workspace\.package\].*?^version = "([^"]+)"') {
+    Write-Host "Error: no version in $(Join-Path $LibdatadogDir "Cargo.toml")" -ForegroundColor Red
+    exit 1
+}
+$Version = $Matches[1]
+Write-Host "  Libdatadog $Version from $LibdatadogDir" -ForegroundColor Gray
 
 # Install the builder binary once.  Each subsequent profile run reuses it.
 # Clear CARGO_BUILD_TARGET so `cargo install` compiles the builder for the
@@ -110,7 +115,7 @@ if ($LibdatadogPath) {
 $savedTarget = $env:CARGO_BUILD_TARGET
 $env:CARGO_BUILD_TARGET = $null
 cargo install `
-    --path libdatadog/builder `
+    --path (Join-Path $LibdatadogDir "builder") `
     --bin release `
     --root .builder `
     --no-default-features `
@@ -125,7 +130,6 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-$HostTriple = (rustc -vV 2>&1 | Where-Object { $_ -match "^host:" }) -replace "^host:\s*", ""
 $CargoTargetDir = Join-Path $PWD "target"
 
 # Run the builder once per profile.  The builder leaves cargo artifacts in
@@ -173,12 +177,15 @@ $DebugOut   = Invoke-Builder -BuildProfile "debug"
 
 # Build datadog-dotnet-ffi, which replaces the profiling DLL.  The PDB path embedded in the
 # DLL already gets the final name.  Uses the dependency versions libdatadog is tested with.
+# Not in the builder's target directory: some libdatadog crates have library file names without
+# a hash, which the builder's and this build would overwrite for each other.
 Copy-Item -Path (Join-Path $LibdatadogDir "Cargo.lock") -Destination (Join-Path $PWD "Cargo.lock") -Force
-$env:CARGO_TARGET_DIR = $CargoTargetDir
+$FfiTargetDir = Join-Path $CargoTargetDir "dotnet-ffi"
+$env:CARGO_TARGET_DIR = $FfiTargetDir
 $env:RUSTFLAGS = "-C relocation-model=pic -C target-feature=+crt-static -C link-arg=/PDBALTPATH:datadog_profiling_ffi.pdb"
 foreach ($p in @("release", "debug")) {
     $cargoProfile = if ($p -eq "debug") { "dev" } else { $p }
-    cargo build -p datadog-dotnet-ffi --target $Target --profile $cargoProfile
+    cargo build -p datadog-dotnet-ffi --target $Target --profile $cargoProfile @CargoConfig
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Error: building datadog-dotnet-ffi ($p) failed" -ForegroundColor Red
         exit 1
@@ -246,12 +253,13 @@ foreach ($f in @("LICENSE", "NOTICE", "LICENSE-3rdparty.csv")) {
 # (the import library cargo produces refers to datadog_dotnet_ffi.dll).
 foreach ($p in @("release", "debug")) {
     $cargoOut  = Join-Path $CargoTargetDir "$Target/$p"
+    $ffiOut    = Join-Path $FfiTargetDir "$Target/$p"
     $dynDir    = Join-Path $PackageDir "$p/dynamic"
     $staticDir = Join-Path $PackageDir "$p/static"
     New-Item -ItemType Directory -Force -Path $dynDir, $staticDir | Out-Null
 
-    Copy-Item -Path (Join-Path $cargoOut "datadog_dotnet_ffi.dll")        -Destination (Join-Path $dynDir "datadog_profiling_ffi.dll")
-    Copy-Item -Path (Join-Path $cargoOut "datadog_dotnet_ffi.pdb")        -Destination (Join-Path $dynDir "datadog_profiling_ffi.pdb")
+    Copy-Item -Path (Join-Path $ffiOut "datadog_dotnet_ffi.dll")          -Destination (Join-Path $dynDir "datadog_profiling_ffi.dll")
+    Copy-Item -Path (Join-Path $ffiOut "datadog_dotnet_ffi.pdb")          -Destination (Join-Path $dynDir "datadog_profiling_ffi.pdb")
     New-ImportLibrary -Dll (Join-Path $dynDir "datadog_profiling_ffi.dll") -DllName "datadog_profiling_ffi.dll" `
         -OutLib (Join-Path $dynDir "datadog_profiling_ffi.lib")
     Copy-Item -Path (Join-Path $cargoOut "datadog_profiling_ffi.lib")     -Destination (Join-Path $staticDir "datadog_profiling_ffi.lib")

@@ -91,7 +91,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('LIBDATADOG_VERSION') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('datadog-dotnet-ffi/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 

@@ -18,7 +18,7 @@ PACKAGE_DIR="$3"
 cd "$(dirname "$0")/.."
 
 # Build with the dependency versions libdatadog itself is tested with.
-cp libdatadog/Cargo.lock Cargo.lock
+cp "$(sh tools/libdatadog.sh dir)/Cargo.lock" Cargo.lock
 
 case "$TARGET" in
     *-apple-darwin)
@@ -43,9 +43,12 @@ case "$PROFILE" in
     *) CARGO_PROFILE="$PROFILE"; PROFILE_DIR="$PROFILE" ;;
 esac
 
-cargo build -p datadog-dotnet-ffi --target "$TARGET" --profile "$CARGO_PROFILE"
+# Not in the builder's target directory: some libdatadog crates have library file names without
+# a hash, which the builder's and this build would overwrite for each other.
+cargo build -p datadog-dotnet-ffi --target "$TARGET" --profile "$CARGO_PROFILE" \
+    --target-dir target/dotnet-ffi ${LIBDATADOG_PATCH:+--config "$LIBDATADOG_PATCH"}
 
-cp "target/$TARGET/$PROFILE_DIR/$BUILT" "$PACKAGE_DIR/lib/$LIB"
+cp "target/dotnet-ffi/$TARGET/$PROFILE_DIR/$BUILT" "$PACKAGE_DIR/lib/$LIB"
 
 # Same post-processing as libdatadog's builder (builder/src/arch/*.rs)
 case "$TARGET" in
