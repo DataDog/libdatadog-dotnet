@@ -8,28 +8,32 @@ A thin packaging wrapper around the official [libdatadog](https://github.com/Dat
 
 ## Build Approach
 
-We **don't** orchestrate cargo + cbindgen ourselves. We install libdatadog's own `release` binary (from its `builder` crate) and let it produce the package:
+We **don't** orchestrate cbindgen ourselves. We install libdatadog's own `release` binary (from its `builder` crate) from the sources `datadog-dotnet-ffi` is built from — cargo's checkout of its libdatadog dependencies, found by `tools/libdatadog.sh` via `cargo metadata` — and let it produce the package, then replace the package's shared library with the `datadog-dotnet-ffi` build:
 
 ```
 cargo install \
-    --git https://github.com/DataDog/libdatadog \
-    --tag "v${LIBDATADOG_VERSION}" \
+    --path "$(tools/libdatadog.sh dir)/builder" \
     --bin release \
     --no-default-features \
     --features "profiling,crashtracker,symbolizer,library-config" \
     builder
 release --out <package-dir> --target <triple>
+tools/build-ffi.sh <triple> <profile> <package-dir>
 ```
 
-The builder handles the FFI cargo build, header generation (cbindgen + dedup), library stripping, and packaging. We just orchestrate per-platform Docker containers and (on Windows) reshape the resulting zip to match what dd-trace-dotnet expects.
+The builder handles the FFI cargo build, header generation (cbindgen + dedup), library stripping, and packaging. We orchestrate per-platform Docker containers and (on Windows) reshape the resulting zip to match what dd-trace-dotnet expects.
+
+`datadog-dotnet-ffi` (the only Rust code here) is a cdylib that depends on libdatadog's crates from git (see [Version Pinning](#version-pinning)) and re-exports `libdd-profiling-ffi` (with the feature list the builder computes for our builder features — keep `datadog-dotnet-ffi/Cargo.toml` in sync with `builder/src/features.rs`), plus the .NET specific FFI (`src/remote_config.rs`: the remote configuration client used by dd-trace-dotnet). Its library is named `datadog_dotnet_ffi` (the dependency's own cdylib would collide otherwise), and `tools/build-ffi.sh` / `build.ps1` copy it over the builder's library under the original names (setting the soname / install name, and on Windows generating an import library for `datadog_profiling_ffi.dll`). Its dependencies are locked by the committed `Cargo.lock` (built with `--locked`), which starts from libdatadog's `Cargo.lock` at the pinned revision, see Common Tasks.
+
+Use `--libdatadog-path ../libdatadog` (`-LibdatadogPath`) to build against a local libdatadog checkout, e.g. to test libdatadog changes: the build scripts patch the libdatadog dependencies of `datadog-dotnet-ffi` to it (a `[patch]` in `target/libdatadog-patch.toml`, passed to cargo with `--config` via `LIBDATADOG_PATCH`), so the builder comes from there too. It is mounted at the same path into the build containers. The patch changes `Cargo.lock` locally; don't commit that.
 
 ## Version Pinning
 
-`LIBDATADOG_VERSION` (single file, no `v` prefix, e.g. `32.0.0`) is the **upstream** libdatadog version this repo builds from. It is distinct from libdatadog-dotnet's own release tag (e.g. `v1.3.5`) that dd-trace-dotnet pins — don't expect the two numbers to be equal.
+The `tag` (e.g. `tag = "v32.0.0"`) of the libdatadog git dependencies in `datadog-dotnet-ffi/Cargo.toml` is the **upstream** libdatadog version this repo builds from — all of them must use the same one. To depend on unreleased libdatadog changes, use `rev = "<commit>"` instead, and go back to a tag once they are released. The builder comes from the same sources, so the headers always match the library; the package version passed to it (pkg-config) is the libdatadog workspace version of those sources. It is distinct from libdatadog-dotnet's own release tag (e.g. `v1.3.5`) that dd-trace-dotnet pins — don't expect the two numbers to be equal.
 
 ⚠️ **The chosen libdatadog version must be API-compatible with dd-trace-dotnet's native profiler C++.** The tracer's profiler (`cor_profiler.cpp`, `dd_profiler_constants.h`) calls libdatadog's profiling FFI (`ddog_prof_SampleType`, `DDOG_PROF_SAMPLE_TYPE_*`, …), and that API drifts between libdatadog tags. A mismatch surfaces in the tracer build as cryptic C++ errors like `error C2061: 'ddog_prof_SampleType'`.
 
-This is a **coordinated** change, not a precondition. You *can* bump `LIBDATADOG_VERSION` and cut a release ahead of the tracer — the tracer won't reference the new release yet, and that's expected. The requirement is only that the dd-trace-dotnet PR which adopts the new libdatadog-dotnet release also builds against its profiling headers in the same rollout, so the native profiler compiles against the matching API.
+This is a **coordinated** change, not a precondition. You *can* bump the libdatadog version and cut a release ahead of the tracer — the tracer won't reference the new release yet, and that's expected. The requirement is only that the dd-trace-dotnet PR which adopts the new libdatadog-dotnet release also builds against its profiling headers in the same rollout, so the native profiler compiles against the matching API.
 
 ## Per-Platform Build Setup
 
@@ -97,9 +101,13 @@ So `build.ps1`:
 
 ```
 libdatadog-dotnet/
-├── LIBDATADOG_VERSION              # Pinned upstream libdatadog tag (no "v")
+├── Cargo.toml                      # Workspace (release profile = libdatadog's)
+├── datadog-dotnet-ffi/             # The shipped library: profiling FFI + .NET specific FFI;
+│                                   # its Cargo.toml pins the upstream libdatadog version
 ├── build.sh                        # Linux/macOS — docker orchestration + macOS native
 ├── build.ps1                       # Windows — runs builder twice, re-assembles legacy zip
+├── tools/build-ffi.sh              # Builds datadog-dotnet-ffi into a builder package
+├── tools/libdatadog.sh             # Locates the libdatadog sources (for the builder)
 ├── tools/docker/
 │   ├── Dockerfile.centos           # x86_64-gnu: cross-rs centos7 + devtoolset-10
 │   ├── Dockerfile.centos-aarch64   # aarch64-gnu: manylinux2014_aarch64 + rustup
@@ -113,9 +121,9 @@ libdatadog-dotnet/
 
 ## Common Tasks
 
-**Update libdatadog version**: edit `LIBDATADOG_VERSION` (the upstream libdatadog version this repo builds from). Ensure the target libdatadog's profiling FFI is API-compatible with dd-trace-dotnet's native profiler C++ — the tracer adopts the resulting libdatadog-dotnet release in a coordinated PR; it won't already reference it. See [Version Pinning](#version-pinning).
+**Update libdatadog version**: change the `tag` of the libdatadog dependencies in `datadog-dotnet-ffi/Cargo.toml` (the upstream libdatadog version this repo builds from), and update `Cargo.lock` to libdatadog's dependency versions at that tag: `cargo metadata --format-version 1 > /dev/null` (resolves the new revision), `cp "$(sh tools/libdatadog.sh dir)/Cargo.lock" Cargo.lock`, then `cargo test -p datadog-dotnet-ffi` (adds our own dependencies on top). Ensure the target libdatadog's profiling FFI is API-compatible with dd-trace-dotnet's native profiler C++ — the tracer adopts the resulting libdatadog-dotnet release in a coordinated PR; it won't already reference it. See [Version Pinning](#version-pinning).
 
-**Change feature set**: edit the `FEATURES` default in `build.sh`, the `Features` default in `build.ps1`, and the `features` input default in `build-platform.yml` / `release.yml` / `build.yml`. Feature names are the builder crate's high-level features (`profiling`, `crashtracker`, `data-pipeline`, `symbolizer`, `library-config`, `log`, `telemetry`, `ddsketch`, `ffe`, `otel-thread-ctx`, `shared-runtime`, `regex-lite`), not the underlying cargo features — e.g. the builder's `otel-thread-ctx` feature internally maps to the `otel-thread-ctx-ffi` FFI crate (see `builder/src/bin/release.rs` in libdatadog), so pass `otel-thread-ctx` here, never the FFI crate name.
+**Change feature set**: edit `FEATURES` in `build.sh` and `$Features` in `build.ps1` (the builder features, which determine the headers etc.), together with the `libdd-profiling-ffi` features in `datadog-dotnet-ffi/Cargo.toml` (what the builder computes for them, see `builder/src/features.rs`), which the shipped library is built with. Feature names are the builder crate's high-level features (`profiling`, `crashtracker`, `data-pipeline`, `symbolizer`, `library-config`, `log`, `telemetry`, `ddsketch`, `ffe`, `otel-thread-ctx`, `shared-runtime`, `regex-lite`), not the underlying cargo features — e.g. the builder's `otel-thread-ctx` feature internally maps to the `otel-thread-ctx-ffi` FFI crate (see `builder/src/bin/release.rs` in libdatadog), so pass `otel-thread-ctx` here, never the FFI crate name.
 
 **Add a platform**: matrix entry in `build-platform.yml`; if it's not host-native, either add a Dockerfile + dispatch case in `build.sh`, or use QEMU. Update the release archive list in `release.yml`.
 
@@ -144,6 +152,9 @@ Output lands in `output/libdatadog-<platform>/`. For aarch64 Linux targets you n
 
 ## Recent Changes (Reverse Chronological)
 
+- **2026-10**: Added `datadog-dotnet-ffi`, which replaces the builder's shared library, with the remote configuration client FFI (`ddog_rc_*`) for dd-trace-dotnet. The libdatadog version is now pinned by its git dependencies (replacing the `LIBDATADOG_VERSION` file), currently v45 plus the unreleased remote config changes of DataDog/libdatadog#2662; the builder is installed from cargo's checkout of them (`tools/libdatadog.sh`) instead of `cargo install --git --tag`. `Cargo.lock` is committed, and the feature set is fixed (no more `--features` / workflow input), as the shipped library is built with the features in `datadog-dotnet-ffi/Cargo.toml`.
+
+- **2026-10**: Bumped to libdatadog v45 (from v38). Rust toolchain pin still `1.87.0` (v45's MSRV). The profiling, crashtracker and library-config headers are source compatible with v38 (only additions), so dd-trace-dotnet's native profiler builds unchanged; the musl builds import a few more libc symbols.
 - **2026-07**: Bumped to libdatadog v38 (from v36). Rust toolchain pin already at `1.87.0`, which matches v38's MSRV, so no toolchain change was needed.
 - **2026-06**: Bumped to libdatadog v36 (from v32). Rust toolchain pin already at `1.87.0`, which matches v36's MSRV, so no toolchain change was needed.
 - **2026-05**: aarch64-gnu switched from cross-rs cross-compile to QEMU + native manylinux2014_aarch64. Necessary because libdd-libunwind-sys (v30) can't be cross-compiled.

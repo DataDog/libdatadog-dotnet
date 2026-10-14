@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+
+[workspace]
+members = ["datadog-dotnet-ffi"]
+resolver = "2"
+
+# Same as libdatadog's release profile, which the builder uses for the profiling library.
+[profile.release]
+codegen-units = 1
+debug = "line-tables-only"
+lto = true
+opt-level = "s"

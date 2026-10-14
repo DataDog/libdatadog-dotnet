@@ -36,7 +36,6 @@ jobs:
       contents: read
     with:
       verify_artifacts: false
-      features: 'profiling,crashtracker,symbolizer,library-config'
 
   create-release:
     name: Create GitHub Release
@@ -211,7 +210,7 @@ jobs:
           cat > release-notes.md << 'NOTES_EOF'
           ## Build Information
 
-          - **Libdatadog version**: see `LIBDATADOG_VERSION` in this repository
+          - **Libdatadog version**: see the libdatadog dependencies in `datadog-dotnet-ffi/Cargo.toml` in this repository
 
           ## Checksums
 
