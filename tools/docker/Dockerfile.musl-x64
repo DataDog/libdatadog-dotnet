@@ -1,5 +1,12 @@
 FROM alpine:3.17
 
+# APPSEC-71273: alpine:3.17 is EOL, so no fixed ca-certificates package ships.
+# Blocklist the compromised eMudhra roots (emSign ECC G3, AAA Certificate Services).
+RUN apk add --no-cache ca-certificates \
+ && sed -i -e 's|^mozilla/emSign_ECC_Root_CA_-_G3.crt|!&|' -e 's|^mozilla/Comodo_AAA_Services_root.crt|!&|' /etc/ca-certificates.conf \
+ && rm -f /usr/share/ca-certificates/mozilla/emSign_ECC_Root_CA_-_G3.crt /usr/share/ca-certificates/mozilla/Comodo_AAA_Services_root.crt \
+ && update-ca-certificates
+
 # Pinned to alpine:3.17 to match dd-trace-dotnet's musl build environment
 # (tracer/build/_build/docker/alpine.build.dockerfile). No prebuilt rust:alpine3.17
 # image exists since Alpine 3.17 reached EOL, so Rust is installed via rustup below.
