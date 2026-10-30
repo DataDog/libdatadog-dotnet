@@ -29,6 +29,13 @@ param(
     [string]$Platform = "x64-windows",
     [string]$OutputDir = "output",
     [string]$Features = "profiling,crashtracker,symbolizer,library-config",
+    # libdatadog-dotnet release version (major.minor.patch, optional leading "v"),
+    # embedded as the DLL FileVersion. Distinct from LIBDATADOG_VERSION: Windows
+    # Installer compares FileVersion when deciding whether to replace the file
+    # on upgrade, so it has to change with this repo's release, not with the
+    # upstream libdatadog pin. Empty omits --file-version and the builder falls
+    # back to the upstream version. Ignored by the builder on non-Windows targets.
+    [string]$FileVersion = "",
     [switch]$Clean
 )
 
@@ -50,12 +57,24 @@ $Target = if ($env:CARGO_BUILD_TARGET) {
 # Read the libdatadog version.  Update LIBDATADOG_VERSION to upgrade.
 $Version = (Get-Content LIBDATADOG_VERSION).Trim()
 
+# --file-version wants major.minor.patch. Accept a leading "v" so callers can
+# pass the release tag (v1.3.5) directly.
+$NormalizedFileVersion = ""
+if ($FileVersion) {
+    $NormalizedFileVersion = $FileVersion -replace '^v', ''
+    if ($NormalizedFileVersion -notmatch '^\d+\.\d+\.\d+$') {
+        Write-Host "Error: -FileVersion must be major.minor.patch (got '$FileVersion'). This is the libdatadog-dotnet release version, not LIBDATADOG_VERSION." -ForegroundColor Red
+        exit 1
+    }
+}
+
 Write-Host "Building libdatadog-dotnet" -ForegroundColor Cyan
-Write-Host "  Platform : $Platform" -ForegroundColor Gray
-Write-Host "  Target   : $Target" -ForegroundColor Gray
-Write-Host "  Features : $Features" -ForegroundColor Gray
-Write-Host "  Output   : $OutputDir" -ForegroundColor Gray
-Write-Host "  Version  : $Version" -ForegroundColor Gray
+Write-Host "  Platform     : $Platform" -ForegroundColor Gray
+Write-Host "  Target       : $Target" -ForegroundColor Gray
+Write-Host "  Features     : $Features" -ForegroundColor Gray
+Write-Host "  Output       : $OutputDir" -ForegroundColor Gray
+Write-Host "  Libdatadog   : $Version" -ForegroundColor Gray
+Write-Host "  FileVersion  : $(if ($NormalizedFileVersion) { $NormalizedFileVersion } else { '(upstream libdatadog version)' })" -ForegroundColor Gray
 
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
     Write-Host "Error: cargo not found. Install Rust from https://rustup.rs/" -ForegroundColor Red
@@ -126,8 +145,16 @@ function Invoke-Builder {
     # is bulletproof.
     $stdoutFile = Join-Path $OutputDir "_builder-$BuildProfile.stdout.log"
     $stderrFile = Join-Path $OutputDir "_builder-$BuildProfile.stderr.log"
+    # --file-version is forwarded to the cargo build as
+    # LIBDATADOG_PACKAGE_VERSION and embedded in the DLL VERSIONINFO.
+    # ProductVersion stays the upstream libdatadog version.
+    $releaseArgs = @("--out", $BuilderOut, "--target", $Target)
+    if ($NormalizedFileVersion) {
+        $releaseArgs += @("--file-version", $NormalizedFileVersion)
+    }
+
     $proc = Start-Process -FilePath ".\.builder\bin\release.exe" `
-        -ArgumentList "--out", "$BuilderOut", "--target", "$Target" `
+        -ArgumentList $releaseArgs `
         -NoNewWindow -PassThru -Wait `
         -RedirectStandardOutput $stdoutFile `
         -RedirectStandardError $stderrFile

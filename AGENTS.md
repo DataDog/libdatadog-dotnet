@@ -18,10 +18,12 @@ cargo install \
     --no-default-features \
     --features "profiling,crashtracker,symbolizer,library-config" \
     builder
-release --out <package-dir> --target <triple>
+release --out <package-dir> --target <triple> [--file-version <major.minor.patch>]
 ```
 
 The builder handles the FFI cargo build, header generation (cbindgen + dedup), library stripping, and packaging. We just orchestrate per-platform Docker containers and (on Windows) reshape the resulting zip to match what dd-trace-dotnet expects.
+
+`--file-version` is Windows-only. It must be **this repo's release version** (`1.3.5`, from tag `v1.3.5`) — not `LIBDATADOG_VERSION`. The builder forwards it as `LIBDATADOG_PACKAGE_VERSION` and embeds it as the DLL `FileVersion`, which Windows Installer compares on upgrade. `ProductVersion` stays the upstream libdatadog version. Omit the flag and `FileVersion` falls back to that upstream version. `build.ps1 -FileVersion` is the local entry point; the Release workflow passes it automatically. PR builds leave it empty.
 
 ## Version Pinning
 
@@ -61,9 +63,9 @@ include/datadog/…  cmake/DatadogConfig.cmake  LICENSE  NOTICE  LICENSE-3rdpart
 ```
 
 So `build.ps1`:
-1. Runs the builder twice — once with `PROFILE=release`, once with `PROFILE=debug`.
+1. Runs the builder twice — once with `PROFILE=release`, once with `PROFILE=debug`. When `-FileVersion` is set, each invocation gets `--file-version`, which the builder forwards to cargo as `LIBDATADOG_PACKAGE_VERSION` so the DLL's `VERSIONINFO` `FileVersion` is the libdatadog-dotnet release (not `LIBDATADOG_VERSION`).
 2. Pulls headers / license / cmake from the release-builder output.
-3. Pulls `.dll`, `.dll.lib`, `.lib` (static), `.pdb` **directly from `target/$Target/{release,debug}/`** because cargo there has the original `_ffi` names AND the `.dll.lib` import library that the builder doesn't copy.
+3. Pulls `.dll`, `.dll.lib`, `.lib` (static), `.pdb` **directly from `target/$Target/{release,debug}/`** because cargo there has the original `_ffi` names AND the `.dll.lib` import library that the builder doesn't copy. The `FileVersion` resource is already in that DLL.
 4. Renames `.dll.lib` → `.lib` in each `dynamic/` slot.
 
 ## Gotchas
@@ -78,7 +80,7 @@ So `build.ps1`:
 
 5. **cmake-rs needs cargo build-script env on macOS**: the builder calls `cmake::Config::build()` for the crashtracker C++ receiver outside a cargo build-script context. cmake-rs / cc-rs read `HOST` / `OUT_DIR` / `OPT_LEVEL` / `DEBUG` / `NUM_JOBS`. The macOS branch of `build.sh` sets all of them; missing any one panics with `environment variable 'X' not defined`. (Windows doesn't hit this — `BUILD_CRASHTRACKER = false` in the builder's `arch/windows.rs`.)
 
-6. **Toolchain pinned to upstream libdatadog's**: Rust `1.87.0` (matches libdatadog's workspace `rust-version`) and macOS runners `macos-14` / `macos-14-large` (Sonoma, matches libdatadog's libddprof-build pipeline). When upstream libdatadog bumps its MSRV or its macOS build version, update both here — building with a different toolchain than upstream can introduce subtle codegen / ABI differences. The pin lives in: `build-platform.yml` (Setup Rust step + matrix `os:` fields), `Dockerfile.centos-aarch64` (rustup-init `--default-toolchain`), and `Dockerfile.musl-*` (`ARG RUST_VERSION` consumed by the rustup install).
+6. **Toolchain pinned to upstream libdatadog's**: Rust `1.91.1` (matches libdatadog's workspace `rust-version`) and macOS runners `macos-14` / `macos-14-large` (Sonoma, matches libdatadog's libddprof-build pipeline). When upstream libdatadog bumps its MSRV or its macOS build version, update both here — building with a different toolchain than upstream can introduce subtle codegen / ABI differences. The pin lives in: `build-platform.yml` (Setup Rust step + matrix `os:` fields), `Dockerfile.centos-aarch64` (rustup-init `--default-toolchain`), and `Dockerfile.musl-*` (`ARG RUST_VERSION` consumed by the rustup install).
 
 7. **Release workflow auth (dd-octo-sts, keyless)**: the repo's ref-creation ruleset blocks `GITHUB_TOKEN` from creating new tags. `release.yml` mints a short-lived token via **DataDog's octo-sts** (OIDC federation — no stored secret) in the `octo-sts` step, and the `actions/github-script` publish step authenticates with `github-token: ${{ steps.octo-sts.outputs.token }}`. The octo-sts identity is on the ruleset's **bypass list**, so it can create the tag ref. This matches how **dd-trace-dotnet and upstream libdatadog** authenticate their release workflows — and because it's OIDC-federated there's **no token to store or rotate** (this replaced the old `RELEASE_TOKEN` PAT, which DataDog policy capped at ~30 days, forcing monthly rotation).
 
@@ -125,7 +127,7 @@ libdatadog-dotnet/
 
 - **`build-platform.yml`** — reusable matrix workflow. Steps: checkout → setup Rust → cache `~/.cargo/{registry,git}` → setup QEMU (only for aarch64 Linux targets) → run `build.{sh,ps1}` → verify output → upload artifact.
 - **`build.yml`** — calls `build-platform.yml` on PR / push to main with `verify_artifacts: true`.
-- **`release.yml`** — manual dispatch (from `main`). Builds all 8 platforms (no verify), archives them, computes SHA256 + SHA512, creates a GitHub release with assets and a checksums-in-the-body note. Publish step auth via dd-octo-sts (OIDC; policy in `.github/chainguard/self.release.sts.yaml`).
+- **`release.yml`** — manual dispatch (from `main`). Resolves this repo's release tag first, passes it to the Windows build as `file_version` (`release --file-version`, the DLL `FileVersion`), builds all 8 platforms (no verify), archives them, computes SHA256 + SHA512, creates a GitHub release with assets and a checksums-in-the-body note. Publish step auth via dd-octo-sts (OIDC; policy in `.github/chainguard/self.release.sts.yaml`).
 
 ## Testing Locally
 
@@ -133,8 +135,8 @@ libdatadog-dotnet/
 # Linux GNU (x86_64), full clean build
 ./build.sh --platform x86_64-unknown-linux-gnu --clean
 
-# Windows
-./build.ps1 -Platform x64-windows -Clean
+# Windows. -FileVersion is the libdatadog-dotnet release, not LIBDATADOG_VERSION.
+./build.ps1 -Platform x64-windows -Clean -FileVersion 1.3.5
 
 # macOS
 ./build.sh --platform aarch64-apple-darwin --clean
@@ -144,6 +146,8 @@ Output lands in `output/libdatadog-<platform>/`. For aarch64 Linux targets you n
 
 ## Recent Changes (Reverse Chronological)
 
+- **2026-10**: Windows release builds pass `release --file-version` set to the libdatadog-dotnet release (not `LIBDATADOG_VERSION`), so the DLL `FileVersion` is what Windows Installer compares on upgrade. `ProductVersion` stays the upstream libdatadog version.
+- **2026-10**: Bumped to libdatadog v47 (from v38). Rust toolchain pin moved from `1.87.0` to `1.91.1` to match v47's MSRV. macOS runners stay on `macos-14` / `macos-14-large` (Sonoma); libddprof-build still builds on the Sonoma AMI.
 - **2026-07**: Bumped to libdatadog v38 (from v36). Rust toolchain pin already at `1.87.0`, which matches v38's MSRV, so no toolchain change was needed.
 - **2026-06**: Bumped to libdatadog v36 (from v32). Rust toolchain pin already at `1.87.0`, which matches v36's MSRV, so no toolchain change was needed.
 - **2026-05**: aarch64-gnu switched from cross-rs cross-compile to QEMU + native manylinux2014_aarch64. Necessary because libdd-libunwind-sys (v30) can't be cross-compiled.
