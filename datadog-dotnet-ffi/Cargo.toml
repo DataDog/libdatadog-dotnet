@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "datadog-dotnet-ffi"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.87.0"
+license = "Apache-2.0"
+publish = false
+description = "The libdatadog library shipped with the .NET tracer: libdatadog's profiling FFI plus .NET specific FFI"
+
+[lib]
+# Shipped as libdatadog_profiling.{so,dylib} / datadog_profiling_ffi.dll, see build.sh / build.ps1.
+# The name must differ from libdd-profiling-ffi's own library to avoid colliding outputs.
+name = "datadog_dotnet_ffi"
+crate-type = ["cdylib"]
+bench = false
+
+[dependencies]
+anyhow = { version = "1.0", default-features = false, features = ["std"] }
+function_name = { version = "0.3.0", default-features = false }
+strum = { version = "0.26", default-features = false }
+tokio = { version = "1.49", default-features = false, features = ["macros", "net", "rt", "time"] }
+tokio-util = { version = "0.7.11", default-features = false }
+
+libdd-capabilities-impl = { git = "https://github.com/DataDog/libdatadog", rev = "6851293707e6b777b0dde428a13940b2293a8434", default-features = false }
+libdd-common = { git = "https://github.com/DataDog/libdatadog", rev = "6851293707e6b777b0dde428a13940b2293a8434", default-features = false }
+libdd-common-ffi = { git = "https://github.com/DataDog/libdatadog", rev = "6851293707e6b777b0dde428a13940b2293a8434", default-features = false, features = ["std"] }
+libdd-remote-config = { git = "https://github.com/DataDog/libdatadog", rev = "6851293707e6b777b0dde428a13940b2293a8434", default-features = false, features = ["client"] }
+# Must be the feature list the libdatadog builder computes for the libdatadog-dotnet builder
+# features (FEATURES in build.sh / build.ps1), see builder/src/features.rs.
+libdd-profiling-ffi = { git = "https://github.com/DataDog/libdatadog", rev = "6851293707e6b777b0dde428a13940b2293a8434", default-features = false, features = [
+  "ddcommon-ffi",
+  "catch_panic",
+  "crashtracker-ffi",
+  "crashtracker-collector",
+  "crashtracker-receiver",
+  "demangler",
+  "symbolizer",
+  "datadog-library-config-ffi",
+] }
+
+[dev-dependencies]
+libdd-remote-config = { git = "https://github.com/DataDog/libdatadog", rev = "6851293707e6b777b0dde428a13940b2293a8434", default-features = false, features = ["client", "test"] }
+tokio = { version = "1.49", default-features = false, features = ["rt-multi-thread"] }
