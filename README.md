@@ -10,7 +10,7 @@ A thin packaging layer over upstream libdatadog. Ships only the FFI components t
 
 ### Prerequisites
 
-- Rust 1.87.0 or newer (CI pins to 1.87.0 to match libdatadog's MSRV)
+- Rust 1.91.1 or newer (CI pins to 1.91.1 to match libdatadog's MSRV)
 - Git
 - PowerShell on Windows; Bash + Docker (with buildx and QEMU for aarch64 Linux builds) elsewhere
 
@@ -23,8 +23,9 @@ A thin packaging layer over upstream libdatadog. Ships only the FFI components t
 # macOS arm64
 ./build.sh --platform aarch64-apple-darwin --clean
 
-# Windows
-./build.ps1 -Platform x64-windows -Clean
+# Windows. -FileVersion is this repo's release (major.minor.patch), embedded
+# as the DLL FileVersion. Omit it for a local build that isn't a release.
+./build.ps1 -Platform x64-windows -Clean -FileVersion 1.3.5
 ```
 
 Output lands in `output/libdatadog-<platform>/`.
@@ -53,12 +54,14 @@ cargo install \
     --no-default-features \
     --features "<feature-list>" \
     builder
-release --out <package-dir> --target <triple>
+release --out <package-dir> --target <triple> [--file-version <major.minor.patch>]
 ```
 
 The builder handles the FFI cargo build, header generation (cbindgen + dedup), library stripping, and packaging.
 
-**Windows quirk**: the builder produces a flat `lib/datadog_profiling.{dll,lib,pdb}` layout, but dd-trace-dotnet's vcpkg portfile expects the legacy `release/{dynamic,static}` + `debug/{dynamic,static}` tree with `_ffi`-suffixed filenames. `build.ps1` runs the builder twice (release + debug) and reassembles that layout from cargo's raw `target/` output.
+**Windows `FileVersion`**: `--file-version` is the libdatadog-dotnet release (`1.3.5` from tag `v1.3.5`), not `LIBDATADOG_VERSION`. The builder forwards it as `LIBDATADOG_PACKAGE_VERSION` and embeds it as the DLL `FileVersion` — the field Windows Installer compares when deciding whether to replace the file on upgrade. `ProductVersion` stays the upstream libdatadog version, so that pin is still recoverable from the shipped DLL. The flag does nothing on non-Windows targets. The Release workflow passes it automatically; omit it and `FileVersion` falls back to the upstream libdatadog version.
+
+**Windows quirk**: the builder produces a flat `lib/datadog_profiling.{dll,lib,pdb}` layout, but dd-trace-dotnet's vcpkg portfile expects the legacy `release/{dynamic,static}` + `debug/{dynamic,static}` tree with `_ffi`-suffixed filenames. `build.ps1` runs the builder twice (release + debug) and reassembles that layout from cargo's raw `target/` output. The `VERSIONINFO` resource is embedded during that cargo build, so the reassembled DLL keeps the `FileVersion` set by `--file-version`.
 
 ## GLIBC Compatibility
 
@@ -82,7 +85,7 @@ Manual dispatch: **Actions → Release → Run workflow**. The workflow builds a
 | `version_increment` | `patch` | `patch` / `minor` / `major` — ignored if `release_version` is set |
 | `release_version` | _(empty)_ | Manual override, e.g. `v1.4.0` |
 
-The upstream libdatadog version isn't a workflow input — it's pinned in the `LIBDATADOG_VERSION` file at the time of the release commit.
+The upstream libdatadog version isn't a workflow input — it's pinned in the `LIBDATADOG_VERSION` file at the time of the release commit. The workflow resolves this repo's own release tag first and passes it to the Windows build as `--file-version`, so the DLL `FileVersion` matches the release (for example `1.4.0`) rather than `LIBDATADOG_VERSION`.
 
 For CI runs without publishing a release, use the **Build** workflow (auto-triggered on every PR and push to `main`).
 
