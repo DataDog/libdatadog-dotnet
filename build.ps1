@@ -32,6 +32,12 @@
 param(
     [string]$Platform = "x64-windows",
     [string]$OutputDir = "output",
+    # libdatadog-dotnet release version (major.minor.patch, optional leading "v"),
+    # embedded as the DLL FileVersion. Distinct from the libdatadog version: Windows
+    # Installer compares FileVersion when deciding whether to replace the file
+    # on upgrade, so it has to change with this repo's release, not with the
+    # upstream libdatadog pin. Empty falls back to the upstream libdatadog version.
+    [string]$FileVersion = "",
     [switch]$Clean,
     # Build from a local libdatadog checkout instead of the revision in datadog-dotnet-ffi/Cargo.toml
     [string]$LibdatadogPath = ""
@@ -56,11 +62,23 @@ $Target = if ($env:CARGO_BUILD_TARGET) {
     $Platform
 }
 
+# FileVersion wants major.minor.patch. Accept a leading "v" so callers can
+# pass the release tag (v1.3.5) directly.
+$NormalizedFileVersion = ""
+if ($FileVersion) {
+    $NormalizedFileVersion = $FileVersion -replace '^v', ''
+    if ($NormalizedFileVersion -notmatch '^\d+\.\d+\.\d+$') {
+        Write-Host "Error: -FileVersion must be major.minor.patch (got '$FileVersion'). This is the libdatadog-dotnet release version, not the libdatadog version." -ForegroundColor Red
+        exit 1
+    }
+}
+
 Write-Host "Building libdatadog-dotnet" -ForegroundColor Cyan
-Write-Host "  Platform : $Platform" -ForegroundColor Gray
-Write-Host "  Target   : $Target" -ForegroundColor Gray
-Write-Host "  Features : $Features" -ForegroundColor Gray
-Write-Host "  Output   : $OutputDir" -ForegroundColor Gray
+Write-Host "  Platform     : $Platform" -ForegroundColor Gray
+Write-Host "  Target       : $Target" -ForegroundColor Gray
+Write-Host "  Features     : $Features" -ForegroundColor Gray
+Write-Host "  Output       : $OutputDir" -ForegroundColor Gray
+Write-Host "  FileVersion  : $(if ($NormalizedFileVersion) { $NormalizedFileVersion } else { '(upstream libdatadog version)' })" -ForegroundColor Gray
 
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
     Write-Host "Error: cargo not found. Install Rust from https://rustup.rs/" -ForegroundColor Red
@@ -162,8 +180,11 @@ function Invoke-Builder {
     # is bulletproof.
     $stdoutFile = Join-Path $OutputDir "_builder-$BuildProfile.stdout.log"
     $stderrFile = Join-Path $OutputDir "_builder-$BuildProfile.stderr.log"
+    # No --file-version: the builder's DLL is replaced by the datadog-dotnet-ffi one below
+    $releaseArgs = @("--out", $BuilderOut, "--target", $Target)
+
     $proc = Start-Process -FilePath ".\.builder\bin\release.exe" `
-        -ArgumentList "--out", "$BuilderOut", "--target", "$Target" `
+        -ArgumentList $releaseArgs `
         -NoNewWindow -PassThru -Wait `
         -RedirectStandardOutput $stdoutFile `
         -RedirectStandardError $stderrFile
@@ -185,6 +206,8 @@ $DebugOut   = Invoke-Builder -BuildProfile "debug"
 # a hash, which the builder's and this build would overwrite for each other.
 $FfiTargetDir = Join-Path $CargoTargetDir "dotnet-ffi"
 $env:CARGO_TARGET_DIR = $FfiTargetDir
+# Embedded as the DLL FileVersion by datadog-dotnet-ffi/build.rs
+$env:LIBDATADOG_PACKAGE_VERSION = $NormalizedFileVersion
 $env:RUSTFLAGS = "-C relocation-model=pic -C target-feature=+crt-static -C link-arg=/PDBALTPATH:datadog_profiling_ffi.pdb"
 foreach ($p in @("release", "debug")) {
     $cargoProfile = if ($p -eq "debug") { "dev" } else { $p }
@@ -195,6 +218,7 @@ foreach ($p in @("release", "debug")) {
     }
 }
 $env:RUSTFLAGS = $null
+$env:LIBDATADOG_PACKAGE_VERSION = $null
 
 # Creates an import library for $Dll under the name $DllName.
 function New-ImportLibrary {
