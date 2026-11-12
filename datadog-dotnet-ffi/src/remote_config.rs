@@ -24,6 +24,7 @@ use libdd_remote_config::{
     RemoteConfigCapabilities, RemoteConfigPath, RemoteConfigProduct, Target,
 };
 use std::ffi::c_void;
+use std::mem::ManuallyDrop;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -46,7 +47,8 @@ type File = RawFile<Arc<Vec<u8>>>;
 type Fetcher = SingleFetcher<RawFileStorage<SharedBytesParser>, NativeCapabilities>;
 
 pub struct RcClient {
-    runtime: tokio::runtime::Runtime,
+    /// Shut down without waiting for its blocking tasks (DNS lookups), see the `Drop` impl.
+    runtime: ManuallyDrop<tokio::runtime::Runtime>,
     /// Only None while being replaced by a new instance, see [`RcClient::rebind`].
     fetcher: Option<Fetcher>,
     /// Tracks what was delivered to the tracer, so it outlives the fetcher instances.
@@ -193,17 +195,30 @@ fn to_products(
     Ok((known, unknown))
 }
 
-fn to_capabilities(capabilities: u64) -> Vec<RemoteConfigCapabilities> {
-    RemoteConfigCapabilities::iter()
+/// Returns the known capabilities, and the bits of the unknown ones.
+fn to_capabilities(capabilities: u64) -> (Vec<RemoteConfigCapabilities>, u64) {
+    let known: Vec<_> = RemoteConfigCapabilities::iter()
         .filter(|c| (*c as u32) < 64 && capabilities & (1 << (*c as u32)) != 0)
-        .collect()
+        .collect();
+    let known_bits = known.iter().fold(0u64, |bits, c| bits | 1 << (*c as u32));
+    (known, capabilities & !known_bits)
 }
 
-fn report_unknown_products(unknown: Vec<String>) -> anyhow::Result<()> {
-    if unknown.is_empty() {
+fn report_unsupported(
+    unknown_products: Vec<String>,
+    unknown_capabilities: u64,
+) -> anyhow::Result<()> {
+    let mut unsupported = vec![];
+    if !unknown_products.is_empty() {
+        unsupported.push(format!("products {}", unknown_products.join(", ")));
+    }
+    if unknown_capabilities != 0 {
+        unsupported.push(format!("capability bits {unknown_capabilities:#x}"));
+    }
+    if unsupported.is_empty() {
         Ok(())
     } else {
-        anyhow::bail!("Unsupported remote config products: {}", unknown.join(", "))
+        anyhow::bail!("Unsupported remote config {}", unsupported.join(" and "))
     }
 }
 
@@ -233,7 +248,7 @@ impl RcClient {
         )
         .with_client_id(to_string(config.client_id)?);
         Ok(RcClient {
-            runtime,
+            runtime: ManuallyDrop::new(runtime),
             fetcher: Some(fetcher),
             tracker: ChangeTracker::default(),
         })
@@ -290,6 +305,15 @@ impl RcClient {
     }
 }
 
+impl Drop for RcClient {
+    fn drop(&mut self) {
+        // Dropping a runtime waits for its blocking tasks, e.g. a slow DNS lookup. The tracer drops
+        // the client from a finalizer (e.g. on AppDomain unload), which must not hang on it.
+        // SAFETY: the runtime is not used anymore, and only taken here.
+        unsafe { ManuallyDrop::take(&mut self.runtime) }.shutdown_background();
+    }
+}
+
 /// Creates a remote config client for the agent at `endpoint` (see `ddog_endpoint_from_url`),
 /// which is copied. The client does nothing until [`ddog_rc_client_fetch`] is called.
 ///
@@ -339,8 +363,8 @@ pub unsafe extern "C" fn ddog_rc_client_rebind(
 }
 
 /// Replaces the subscribed products (names like `ASM_DD`) and the capabilities (bit n set for the
-/// capability with index n). Unsupported products are reported as error, after applying the
-/// supported ones.
+/// capability with index n). Unsupported products and capabilities are reported as error, after
+/// applying the supported ones.
 ///
 /// # Safety
 /// All slices must be valid.
@@ -353,11 +377,12 @@ pub unsafe extern "C" fn ddog_rc_client_set_products(
     capabilities: u64,
 ) -> VoidResult {
     wrap_with_void_ffi_result!({
-        let (products, unknown) = to_products(products)?;
+        let (products, unknown_products) = to_products(products)?;
+        let (capabilities, unknown_capabilities) = to_capabilities(capabilities);
         client
             .fetcher()?
-            .set_product_capabilities(products, to_capabilities(capabilities));
-        report_unknown_products(unknown)?;
+            .set_product_capabilities(products, capabilities);
+        report_unsupported(unknown_products, unknown_capabilities)?;
     })
 }
 
@@ -498,7 +523,10 @@ mod tests {
 
         fn create(&mut self, url: &str) -> VoidResult {
             let mut client = std::ptr::null_mut();
-            let endpoint = ddog_endpoint_from_url(CharSlice::from(url)).unwrap();
+            let mut endpoint = ddog_endpoint_from_url(CharSlice::from(url)).unwrap();
+            // As set by the tracer: the 3 s default is too short for the large contents test in
+            // debug builds
+            endpoint.timeout_ms = 15_000;
             let config = RcClientConfig {
                 language: "dotnet".into(),
                 tracer_version: "3.0.0".into(),
@@ -536,6 +564,10 @@ mod tests {
         }
 
         fn add_file(&self, id: &str, services: &[&str], contents: &str) {
+            self.add_file_version(id, services, contents, 1);
+        }
+
+        fn add_file_version(&self, id: &str, services: &[&str], contents: &str, version: u64) {
             let targets = services
                 .iter()
                 .map(|s| {
@@ -550,7 +582,7 @@ mod tests {
                 .collect();
             self.server.files.lock().unwrap().insert(
                 RemoteConfigPath::parse(&format!("datadog/2/APM_TRACING/{id}/config")).unwrap(),
-                (targets, 1, contents.to_string()),
+                (targets, version, contents.to_string()),
             );
         }
 
@@ -598,7 +630,28 @@ mod tests {
                     .map(|s| (s.id.clone(), s.apply_state, s.apply_error.clone()))
                     .collect(),
                 cached_files: request.as_ref().unwrap().cached_target_files.len(),
+                error: state.has_error.then(|| state.error.clone()),
             }
+        }
+
+        fn respond_once(&self, status: u16, body: impl Into<Vec<u8>>) {
+            *self.server.next_response.lock().unwrap() = Some(
+                http::Response::builder()
+                    .status(status)
+                    .body(libdd_common::http_common::Body::from(body.into()))
+                    .unwrap(),
+            );
+        }
+
+        /// Fetches, expecting an error, and returns its message.
+        fn fetch_error(&self) -> String {
+            let mut changes = RcChanges::default();
+            let VoidResult::Err(err) = (unsafe {
+                ddog_rc_client_fetch(self.client(), std::ptr::null_mut(), &mut changes)
+            }) else {
+                panic!("expected an error");
+            };
+            err.as_ref().to_string()
         }
     }
 
@@ -607,6 +660,43 @@ mod tests {
         targets_version: u64,
         config_states: Vec<(String, u64, String)>,
         cached_files: usize,
+        error: Option<String>,
+    }
+
+    /// An agent response with the given (path, contents, sha256 announced in the targets) files.
+    fn agent_response(files: &[(&str, &str, &str)]) -> Vec<u8> {
+        use base64::Engine;
+        let b64 = base64::engine::general_purpose::STANDARD;
+        let targets = serde_json::json!({
+            "signed": {
+                "custom": { "opaque_backend_state": "state" },
+                "targets": files
+                    .iter()
+                    .map(|(path, contents, hash)| {
+                        let target = serde_json::json!({
+                            "custom": { "v": 1 },
+                            "hashes": { "sha256": hash },
+                            "length": contents.len(),
+                        });
+                        (path.to_string(), target)
+                    })
+                    .collect::<serde_json::Map<_, _>>(),
+                "version": 7,
+            }
+        });
+        serde_json::to_vec(&serde_json::json!({
+            "targets": b64.encode(serde_json::to_vec(&targets).unwrap()),
+            "target_files": files.iter().map(|(path, contents, _)| serde_json::json!({
+                "path": path, "raw": b64.encode(contents),
+            })).collect::<Vec<_>>(),
+            "client_configs": files.iter().map(|(path, _, _)| path.to_string()).collect::<Vec<_>>(),
+        }))
+        .unwrap()
+    }
+
+    fn sha256(contents: &str) -> String {
+        use sha2::Digest;
+        format!("{:x}", sha2::Sha256::digest(contents))
     }
 
     impl Drop for Fixture {
@@ -802,5 +892,174 @@ mod tests {
         assert!(err.as_ref().contains("cancelled"), "{}", err.as_ref());
         canceller.join().unwrap();
         drop(unsafe { handle.take() });
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn reports_unknown_capabilities_after_applying_the_known_ones() {
+        let mut fixture = Fixture::new();
+        fixture.start();
+        let products = slices(&["ASM_DD"]);
+        let result = unsafe {
+            ddog_rc_client_set_products(
+                fixture.client(),
+                Slice::new(&products),
+                1 << RemoteConfigCapabilities::AsmActivation as u32 | 1 << 63 | 1,
+            )
+        };
+        let VoidResult::Err(err) = result else {
+            panic!("expected an error");
+        };
+        assert!(
+            err.as_ref().contains("0x8000000000000001"),
+            "{}",
+            err.as_ref()
+        );
+        fixture.fetch();
+        let request = fixture.server.last_request.lock().unwrap();
+        assert_eq!(
+            request
+                .as_ref()
+                .unwrap()
+                .client
+                .as_ref()
+                .unwrap()
+                .capabilities,
+            [0x02]
+        );
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn contents_outlive_a_later_update() {
+        let mut fixture = Fixture::new();
+        fixture.start();
+        fixture.add_file("a", &["first"], "v1");
+        let mut changes = RcChanges::default();
+        unsafe { ddog_rc_client_fetch(fixture.client(), std::ptr::null_mut(), &mut changes) }
+            .unwrap();
+        assert_eq!(changes.len, 1);
+        let change = unsafe { &*changes.ptr };
+        let (ptr, len, owner) = (
+            change.contents_ptr,
+            change.contents_len,
+            change.contents_owner,
+        );
+        unsafe { ddog_rc_changes_drop(changes) };
+
+        fixture.add_file_version("a", &["first"], "v2 is longer", 2);
+        assert_eq!(
+            fixture.fetch(),
+            [(UPSERT, path("a"), Some("v2 is longer".to_string()))]
+        );
+        assert_eq!(unsafe { std::slice::from_raw_parts(ptr, len) }, b"v1");
+        unsafe { ddog_rc_content_drop(owner) };
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn delivers_large_contents_intact() {
+        let mut fixture = Fixture::new();
+        fixture.start();
+        // Several times the size of the largest real configs (ASM rules are a few MB)
+        let contents = format!("{{\"blob\":\"{}\"}}", "x".repeat(8 * 1024 * 1024));
+        fixture.add_file("big", &["first"], &contents);
+        let mut changes = RcChanges::default();
+        let result =
+            unsafe { ddog_rc_client_fetch(fixture.client(), std::ptr::null_mut(), &mut changes) };
+        // Not unwrap(), which doesn't show the error, e.g. a timeout
+        if let VoidResult::Err(err) = result {
+            panic!("{}", err.as_ref());
+        }
+        assert_eq!(changes.len, 1);
+        let change = unsafe { &*changes.ptr };
+        assert_eq!(
+            unsafe { std::slice::from_raw_parts(change.contents_ptr, change.contents_len) },
+            contents.as_bytes()
+        );
+        unsafe {
+            ddog_rc_content_drop(change.contents_owner);
+            ddog_rc_changes_drop(changes);
+        }
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn a_file_with_a_wrong_hash_is_not_delivered_and_reported_to_the_agent() {
+        let mut fixture = Fixture::new();
+        fixture.start();
+        let (good, bad) = (path("good"), path("bad"));
+        fixture.respond_once(
+            200,
+            agent_response(&[
+                (&good, "{}", &sha256("{}")),
+                (&bad, "{}", &sha256("something else")),
+            ]),
+        );
+        assert_eq!(fixture.fetch(), [(UPSERT, good, Some("{}".to_string()))]);
+
+        fixture.fetch();
+        let error = fixture.last_request_state().error.unwrap();
+        assert!(error.contains(&bad), "{error}");
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn garbled_and_server_error_responses_fail_and_keep_the_configs() {
+        let mut fixture = Fixture::new();
+        fixture.start();
+        fixture.add_file("a", &["first"], "1");
+        assert_eq!(fixture.fetch().len(), 1);
+
+        fixture.respond_once(500, "agent failure");
+        assert!(fixture.fetch_error().contains("agent failure"));
+        fixture.respond_once(200, "{\"targets\": tru");
+        let garbled = fixture.fetch_error();
+        fixture.respond_once(
+            200,
+            &agent_response(&[(&path("a"), "1", &sha256("1"))])[..20],
+        );
+        let truncated = fixture.fetch_error();
+        assert!(
+            !garbled.contains("panic") && !truncated.contains("panic"),
+            "{garbled} / {truncated}"
+        );
+
+        // Still applied: nothing is removed, nor delivered again, and the file is still cached
+        assert_eq!(fixture.fetch(), []);
+        let state = fixture.last_request_state();
+        assert_eq!(state.cached_files, 1);
+        // The parse error of the truncated response is reported to the agent
+        assert!(state.error.is_some());
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn agent_404_and_expired_configs_remove_every_config() {
+        let mut fixture = Fixture::new();
+        fixture.start();
+        fixture.add_file("a", &["first"], "1");
+        fixture.add_file("b", &["first"], "2");
+        assert_eq!(fixture.fetch().len(), 2);
+
+        // e.g. remote configuration disabled in the agent
+        fixture.respond_once(404, "");
+        let mut changes = fixture.fetch();
+        changes.sort();
+        assert_eq!(
+            changes,
+            [(REMOVE, path("a"), None), (REMOVE, path("b"), None)]
+        );
+        assert_eq!(fixture.fetch().len(), 2);
+
+        // The agent serves from a cache whose signatures expired
+        *fixture.server.config_status.lock().unwrap() =
+            libdd_trace_protobuf::remoteconfig::ConfigStatus::Expired;
+        let mut changes = fixture.fetch();
+        changes.sort();
+        assert_eq!(
+            changes,
+            [(REMOVE, path("a"), None), (REMOVE, path("b"), None)]
+        );
     }
 }

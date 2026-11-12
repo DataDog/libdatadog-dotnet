@@ -380,13 +380,18 @@ name = "datadog-dotnet-ffi"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64",
  "build_common",
  "function_name",
+ "http",
  "libdd-capabilities-impl",
  "libdd-common",
  "libdd-common-ffi",
  "libdd-profiling-ffi",
  "libdd-remote-config",
+ "libdd-trace-protobuf",
+ "serde_json",
+ "sha2",
  "strum",
  "tokio",
  "tokio-util",
