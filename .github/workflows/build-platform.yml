@@ -55,15 +55,17 @@ jobs:
           - platform: aarch64-alpine-linux-musl
             target: aarch64-unknown-linux-musl
             os: ubuntu-latest
-          # macOS builds — pinned to Sonoma (macos-14) to match libdatadog's
-          # libddprof-build pipeline and keep a lower minimum-OS baseline at
-          # link time than building on Sequoia would produce.
+          # macOS builds. deployment_target, Rust's default minimum macOS, also
+          # applies to the C code and the crashtracking receiver, which
+          # otherwise take the runner's SDK version.
           - platform: x86_64-apple-darwin
             target: x86_64-apple-darwin
-            os: macos-14-large
+            os: macos-15-large
+            deployment_target: '10.12'
           - platform: aarch64-apple-darwin
             target: aarch64-apple-darwin
-            os: macos-14
+            os: macos-15
+            deployment_target: '11.0'
 
     steps:
       - name: Checkout code
@@ -107,6 +109,8 @@ jobs:
       - name: Build ${{ matrix.platform }}
         env:
           CARGO_BUILD_TARGET: ${{ matrix.target }}
+          # Read by rustc, cc, cmake and clang. Empty, and unused, off macOS.
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment_target }}
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
             # -FileVersion is this repo's release (e.g. 1.3.5), not the libdatadog version.
@@ -159,6 +163,17 @@ jobs:
           if [ ! -f "$output_dir/LICENSE" ]; then
             echo "Error: LICENSE not found in $output_dir/"
             exit 1
+          fi
+
+          # The minimum macOS is LC_BUILD_VERSION's minos, or LC_VERSION_MIN_MACOSX's version on x86_64
+          if [ "$RUNNER_OS" == "macOS" ]; then
+            for f in "$output_dir/lib/libdatadog_profiling.dylib" "$output_dir/bin/libdatadog-crashtracking-receiver"; do
+              minos=$(otool -l "$f" | awk '/LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX/{c=1} c && ($1=="minos" || $1=="version"){print $2; exit}')
+              if [ "$minos" != "${{ matrix.deployment_target }}" ]; then
+                echo "Error: $f requires macOS '$minos', not ${{ matrix.deployment_target }}"
+                exit 1
+              fi
+            done
           fi
 
           echo "Build artifacts verified successfully!"

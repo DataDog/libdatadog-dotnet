@@ -121,12 +121,11 @@ next build; there are no prebuilt/pushed images to refresh:
   (`Dockerfile.centos` for x86_64-gnu installs no Rust — it mounts the host
   toolchain — which is why it is not in the list above.)
 
-### Step 4: Check the macOS runner pin (only if the toolchain shifted)
+### Step 4: Check the minimum macOS (only if the toolchain shifted)
 
-macOS runners are pinned (`macos-14` / `macos-14-large`, Sonoma) to match
-upstream libdatadog's `libddprof-build` pipeline. This rarely changes. Only
-revisit it if upstream moved its macOS build image; the `os:` fields live in
-`.github/workflows/build-platform.yml`.
+The matrix `deployment_target` in `.github/workflows/build-platform.yml` is
+Rust's default minimum macOS for each target. If the new toolchain changes that
+default, update it to match.
 
 ### Step 5: Update docs
 
