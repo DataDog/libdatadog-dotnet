@@ -26,7 +26,7 @@ Copy this checklist and track progress:
 - [ ] Step 1: Resolve the target version
 - [ ] Step 2: Update the libdatadog dependencies in datadog-dotnet-ffi/Cargo.toml
 - [ ] Step 3: Check upstream Rust MSRV; update the pin if changed
-- [ ] Step 4: Check the macOS runner pin (only if MSRV/toolchain shifted)
+- [ ] Step 4: Check the minimum macOS (only if MSRV/toolchain shifted)
 - [ ] Step 5: Update AGENTS.md "Recent Changes" + README if needed
 - [ ] Step 6: Summarize and propose next steps (build / PR)
 ```
