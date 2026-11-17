@@ -132,7 +132,7 @@ libdatadog-dotnet/
 
 ## Workflow Files
 
-- **`build-platform.yml`** — reusable matrix workflow. Steps: checkout → setup Rust → cache `~/.cargo/{registry,git}` → setup QEMU (only for aarch64 Linux targets) → run `build.{sh,ps1}` → verify output → upload artifact.
+- **`build-platform.yml`** — reusable matrix workflow. Steps: checkout → setup Rust → cache `~/.cargo/{registry,git}` → setup QEMU (only for aarch64 Linux targets) → run `build.{sh,ps1}` → with `verify_artifacts`, `cargo test -p datadog-dotnet-ffi` once per runner OS and architecture (x64 Windows, x64 glibc Linux, both macOS) and verify output → upload artifact.
 - **`build.yml`** — calls `build-platform.yml` on PR / push to main with `verify_artifacts: true`.
 - **`release.yml`** — manual dispatch (from `main`). Resolves this repo's release tag first, passes it to the Windows build as `file_version` (`build.ps1 -FileVersion`, the DLL `FileVersion`), builds all 8 platforms (no verify), archives them, computes SHA256 + SHA512, creates a GitHub release with assets and a checksums-in-the-body note. Publish step auth via dd-octo-sts (OIDC; policy in `.github/chainguard/self.release.sts.yaml`).
 
