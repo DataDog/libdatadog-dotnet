@@ -53,6 +53,8 @@ pub struct RcClient {
     fetcher: Option<Fetcher>,
     /// Tracks what was delivered to the tracer, so it outlives the fetcher instances.
     tracker: ChangeTracker<File>,
+    /// The fetcher doesn't expose it, but [`RcClient::set_tags`] passes it back.
+    runtime_id: String,
 }
 
 // The tracer uses a client from whichever thread polls, one at a time
@@ -230,10 +232,11 @@ impl RcClient {
             .max_blocking_threads(1)
             .thread_keep_alive(Duration::from_secs(1))
             .build()?;
+        let runtime_id = to_string(config.runtime_id)?;
         let fetcher = SingleFetcher::new_no_agentless(
             RawFileStorage::default(),
             to_target(&config.target)?,
-            to_string(config.runtime_id)?,
+            runtime_id.clone(),
             ConfigOptions {
                 invariants: ConfigInvariants {
                     language: to_string(config.language)?,
@@ -251,6 +254,7 @@ impl RcClient {
             runtime: ManuallyDrop::new(runtime),
             fetcher: Some(fetcher),
             tracker: ChangeTracker::default(),
+            runtime_id,
         })
     }
 
@@ -266,11 +270,20 @@ impl RcClient {
         Ok(())
     }
 
+    fn set_tags(&mut self, tags: Vec<String>) -> anyhow::Result<()> {
+        let runtime_id = self.runtime_id.clone();
+        let fetcher = self.fetcher()?;
+        let client_id = fetcher.get_client_id().to_string();
+        fetcher.set_identity(client_id, runtime_id, tags);
+        Ok(())
+    }
+
     fn fetch(&mut self, cancel: Option<&CancellationToken>) -> anyhow::Result<ChangesBatch> {
         let RcClient {
             runtime,
             fetcher,
             tracker,
+            ..
         } = self;
         let fetcher = fetcher.as_mut().ok_or_else(fetcher_lost)?;
         let files = runtime.block_on(async {
@@ -359,6 +372,23 @@ pub unsafe extern "C" fn ddog_rc_client_rebind(
 ) -> VoidResult {
     wrap_with_void_ffi_result!({
         client.rebind(to_target(target)?, endpoint.cloned())?;
+    })
+}
+
+/// Replaces the `key:value` formatted tags sent with each request. Unlike
+/// [`ddog_rc_client_rebind`], keeps the client session.
+///
+/// # Safety
+/// All slices must be valid.
+#[unsafe(no_mangle)]
+#[must_use]
+#[named]
+pub unsafe extern "C" fn ddog_rc_client_set_tags(
+    client: &mut RcClient,
+    tags: Slice<CharSlice>,
+) -> VoidResult {
+    wrap_with_void_ffi_result!({
+        client.set_tags(to_strings(tags)?)?;
     })
 }
 
@@ -822,6 +852,34 @@ mod tests {
         assert_eq!(state.service, "second");
         assert_eq!(state.targets_version, 0);
         assert_eq!(state.cached_files, 2);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn set_tags_keeps_the_session() {
+        let mut fixture = Fixture::new();
+        fixture.start();
+        fixture.add_file("a", &["first"], "1");
+        assert_eq!(fixture.fetch().len(), 1);
+        fixture.fetch();
+        let targets_version = fixture.last_request_state().targets_version;
+        assert_ne!(targets_version, 0);
+
+        let tags = slices(&["key:other"]);
+        unsafe { ddog_rc_client_set_tags(fixture.client(), Slice::new(&tags)) }.unwrap();
+        assert_eq!(fixture.fetch(), []);
+        let request = fixture.server.last_request.lock().unwrap();
+        let client = request.as_ref().unwrap().client.as_ref().unwrap();
+        let tracer = client.client_tracer.as_ref().unwrap();
+        assert_eq!(tracer.tags, ["key:other"]);
+        assert_eq!(
+            (client.id.as_str(), tracer.runtime_id.as_str()),
+            ("client-id", "runtime-id")
+        );
+        assert_eq!(
+            client.state.as_ref().unwrap().targets_version,
+            targets_version
+        );
     }
 
     #[test]
