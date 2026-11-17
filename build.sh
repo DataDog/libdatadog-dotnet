@@ -7,7 +7,7 @@
 # Copyright 2025-present Datadog, Inc.
 
 # Build script for libdatadog-dotnet.
-# The libdatadog version is controlled by the LIBDATADOG_VERSION file.
+# The libdatadog revision is pinned by the libdatadog dependencies in datadog-dotnet-ffi/Cargo.toml.
 # Linux builds run inside Docker (for GLIBC 2.17 / musl compatibility).
 # macOS builds run natively via cargo.
 
@@ -16,16 +16,16 @@ set -e
 PLATFORM=""
 OUTPUT_DIR="output"
 PROFILE="release"
-FEATURES=""
 CLEAN=false
+LIBDATADOG_PATH=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --platform) PLATFORM="$2"; shift 2 ;;
         --output)   OUTPUT_DIR="$2"; shift 2 ;;
         --profile)  PROFILE="$2"; shift 2 ;;
-        --features) FEATURES="$2"; shift 2 ;;
         --clean)    CLEAN=true; shift ;;
+        --libdatadog-path) LIBDATADOG_PATH="$2"; shift 2 ;;
         -h|--help)
             echo "Usage: $0 --platform PLATFORM [OPTIONS]"
             echo ""
@@ -33,10 +33,9 @@ while [[ $# -gt 0 ]]; do
             echo "  --platform PLATFORM  Target platform / output directory suffix"
             echo "  --output DIR         Output directory (default: output)"
             echo "  --profile PROFILE    Build profile: debug or release (default: release)"
-            echo "  --features FEATURES  Comma-separated builder crate features"
-            echo "                       (default: profiling,crashtracker,"
-            echo "                                symbolizer,library-config)"
             echo "  --clean              Remove output directory before building"
+            echo "  --libdatadog-path P  Build from a local libdatadog checkout instead of"
+            echo "                       the revision in datadog-dotnet-ffi/Cargo.toml"
             echo "  -h, --help           Show this help"
             echo ""
             echo "Environment variables:"
@@ -61,14 +60,10 @@ TARGET="${CARGO_BUILD_TARGET:-$PLATFORM}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Read the libdatadog version.  Update LIBDATADOG_VERSION to upgrade.
-VERSION=$(cat LIBDATADOG_VERSION)
-
-# Builder crate features compiled into the release binary.
-# These control which FFI modules are included in the output library.
-# Feature names map to flags in builder/src/bin/release.rs in libdatadog.
-# Override via --features on the command line.
-FEATURES="${FEATURES:-profiling,crashtracker,symbolizer,library-config}"
+# Builder crate features: which FFI modules (headers etc.) the package contains. Feature names map
+# to flags in builder/src/bin/release.rs in libdatadog. Must match the libdd-profiling-ffi features
+# in datadog-dotnet-ffi/Cargo.toml, which the shipped library is built with.
+FEATURES="profiling,crashtracker,symbolizer,library-config"
 
 if [[ "$CLEAN" == true ]]; then
     rm -rf "$OUTPUT_DIR"
@@ -77,6 +72,24 @@ fi
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 PACKAGE_DIR="$OUTPUT_DIR/libdatadog-${PLATFORM:-$TARGET}"
+
+# A local libdatadog checkout replaces the libdatadog dependencies of datadog-dotnet-ffi via a
+# cargo [patch] (passed with --config), and with them the sources tools/libdatadog.sh finds.
+DOCKER_LIBDATADOG_ARGS=()
+if [[ -n "$LIBDATADOG_PATH" ]]; then
+    LIBDATADOG_PATH="$(cd "$LIBDATADOG_PATH" && pwd)"
+    export LIBDATADOG_PATCH=target/libdatadog-patch.toml
+    mkdir -p target
+    {
+        echo '[patch."https://github.com/DataDog/libdatadog"]'
+        sed -n 's|^\([a-z0-9-]*\) = { git = "https://github.com/DataDog/libdatadog".*|\1|p' \
+            datadog-dotnet-ffi/Cargo.toml | sort -u | while read -r crate; do
+            echo "$crate = { path = \"$LIBDATADOG_PATH/$crate\" }"
+        done
+    } > "$LIBDATADOG_PATCH"
+    # Mounted at the same path, so that the patch also applies inside the containers
+    DOCKER_LIBDATADOG_ARGS=(-v "$LIBDATADOG_PATH:$LIBDATADOG_PATH" -e LIBDATADOG_PATCH)
+fi
 
 # docker_run_gnu IMAGE TARGET PLATFORM
 # Runs the builder inside an x86_64 GNU/glibc container (CentOS 7 sysroot).
@@ -98,10 +111,10 @@ docker_run_gnu() {
         -v "${cargo_home}:/usr/local/cargo" \
         -v "${rustup_home}:/usr/local/rustup" \
         -v "$SCRIPT_DIR:/workspace" \
+        "${DOCKER_LIBDATADOG_ARGS[@]}" \
         -w /workspace \
         -e CARGO_HOME=/usr/local/cargo \
         -e RUSTUP_HOME=/usr/local/rustup \
-        -e BUILDER_VERSION="$VERSION" \
         -e BUILDER_FEATURES="$FEATURES" \
         -e BUILDER_PROFILE="$PROFILE" \
         -e BUILDER_TARGET="$target" \
@@ -114,9 +127,9 @@ docker_run_gnu() {
             # Unset CARGO_ENCODED_RUSTFLAGS so cargo install builds the builder
             # binary without interference from any RUSTFLAGS overrides.
             unset CARGO_ENCODED_RUSTFLAGS
+            LIBDATADOG_DIR=$(sh tools/libdatadog.sh dir)
             cargo install \
-                --git https://github.com/DataDog/libdatadog \
-                --tag "v${BUILDER_VERSION}" \
+                --path "${LIBDATADOG_DIR}/builder" \
                 --bin release \
                 --root /tmp/builder \
                 --no-default-features \
@@ -144,11 +157,13 @@ docker_run_gnu() {
             OPT_LEVEL="${OPT_LEVEL}" \
             DEBUG="${DEBUG}" \
             NUM_JOBS="$(nproc 2>/dev/null || echo 4)" \
-            CARGO_PKG_VERSION="${BUILDER_VERSION}" \
+            CARGO_PKG_VERSION="$(sh tools/libdatadog.sh version)" \
             CARGO_TARGET_DIR="/workspace/target" \
             /tmp/builder/bin/release \
                 --out "/workspace/output/libdatadog-${BUILDER_PLATFORM}" \
                 --target "${BUILDER_TARGET}"
+            sh tools/build-ffi.sh "${BUILDER_TARGET}" "${BUILDER_PROFILE}" \
+                "/workspace/output/libdatadog-${BUILDER_PLATFORM}"
         '
 }
 
@@ -167,9 +182,9 @@ docker_run_musl() {
         -v "$HOME/.cargo/registry:/root/.cargo/registry" \
         -v "$HOME/.cargo/git:/root/.cargo/git" \
         -v "$SCRIPT_DIR:/workspace" \
+        "${DOCKER_LIBDATADOG_ARGS[@]}" \
         -w /workspace \
         -e CARGO_HOME=/root/.cargo \
-        -e BUILDER_VERSION="$VERSION" \
         -e BUILDER_FEATURES="$FEATURES" \
         -e BUILDER_PROFILE="$PROFILE" \
         -e BUILDER_TARGET="$target" \
@@ -181,9 +196,9 @@ docker_run_musl() {
             # Unset CARGO_ENCODED_RUSTFLAGS so cargo install builds the builder
             # binary without interference from any RUSTFLAGS overrides.
             unset CARGO_ENCODED_RUSTFLAGS
+            LIBDATADOG_DIR=$(sh tools/libdatadog.sh dir)
             cargo install \
-                --git https://github.com/DataDog/libdatadog \
-                --tag "v${BUILDER_VERSION}" \
+                --path "${LIBDATADOG_DIR}/builder" \
                 --bin release \
                 --root /tmp/builder \
                 --no-default-features \
@@ -222,11 +237,13 @@ docker_run_musl() {
             OPT_LEVEL="${OPT_LEVEL}" \
             DEBUG="${DEBUG}" \
             NUM_JOBS="$(nproc 2>/dev/null || echo 4)" \
-            CARGO_PKG_VERSION="${BUILDER_VERSION}" \
+            CARGO_PKG_VERSION="$(sh tools/libdatadog.sh version)" \
             CARGO_TARGET_DIR="/workspace/target" \
             /tmp/builder/bin/release \
                 --out "/workspace/output/libdatadog-${BUILDER_PLATFORM}" \
                 --target "${BUILDER_TARGET}"
+            sh tools/build-ffi.sh "${BUILDER_TARGET}" "${BUILDER_PROFILE}" \
+                "/workspace/output/libdatadog-${BUILDER_PLATFORM}"
         '
 }
 
@@ -265,9 +282,9 @@ case "$TARGET" in
         # binary for the host.  The builder receives --target as a CLI arg and
         # handles cross-compilation internally (e.g. x86_64 on an arm64 runner).
         unset CARGO_BUILD_TARGET
+        LIBDATADOG_DIR=$(sh tools/libdatadog.sh dir)
         cargo install \
-            --git https://github.com/DataDog/libdatadog \
-            --tag "v${VERSION}" \
+            --path "$LIBDATADOG_DIR/builder" \
             --bin release \
             --root .builder \
             --no-default-features \
@@ -293,11 +310,12 @@ case "$TARGET" in
         OPT_LEVEL="$OPT_LEVEL" \
         DEBUG="$DEBUG" \
         NUM_JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 4)" \
-        CARGO_PKG_VERSION="$VERSION" \
+        CARGO_PKG_VERSION="$(sh tools/libdatadog.sh version)" \
         CARGO_TARGET_DIR="$SCRIPT_DIR/target" \
         .builder/bin/release \
             --out "$PACKAGE_DIR" \
             --target "$TARGET"
+        sh tools/build-ffi.sh "$TARGET" "$PROFILE" "$PACKAGE_DIR"
         ;;
     *)
         echo "Error: unsupported target '$TARGET'" >&2

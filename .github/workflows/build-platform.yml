@@ -10,18 +10,13 @@ name: Build Platform
 on:
   workflow_call:
     inputs:
-      features:
-        description: 'Comma-separated builder crate features (e.g. profiling,crashtracker,symbolizer,library-config)'
-        required: false
-        type: string
-        default: 'profiling,crashtracker,symbolizer,library-config'
       verify_artifacts:
-        description: 'Whether to verify build artifacts after building'
+        description: 'Whether to run the datadog-dotnet-ffi tests and verify build artifacts after building'
         required: false
         type: boolean
         default: false
       file_version:
-        description: 'libdatadog-dotnet release version (major.minor.patch) embedded as the Windows DLL FileVersion via release --file-version. Empty omits the flag, so FileVersion falls back to the upstream libdatadog version. Has no effect on non-Windows targets.'
+        description: 'libdatadog-dotnet release version (major.minor.patch) embedded as the Windows DLL FileVersion (build.ps1 -FileVersion, datadog-dotnet-ffi/build.rs). Empty falls back to the upstream libdatadog version. Has no effect on non-Windows targets.'
         required: false
         type: string
         default: ''
@@ -38,11 +33,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # test: runs datadog-dotnet-ffi's tests for the runner's own target (cargo test has no
+        # --target), so once per runner OS and architecture
         include:
           # Windows builds
           - platform: x64-windows
             target: x86_64-pc-windows-msvc
             os: windows-latest
+            test: true
           - platform: x86-windows
             target: i686-pc-windows-msvc
             os: windows-latest
@@ -50,6 +48,7 @@ jobs:
           - platform: x86_64-unknown-linux-gnu
             target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
+            test: true
           - platform: x86_64-alpine-linux-musl
             target: x86_64-unknown-linux-musl
             os: ubuntu-latest
@@ -67,10 +66,12 @@ jobs:
             target: x86_64-apple-darwin
             os: macos-15-large
             deployment_target: '10.12'
+            test: true
           - platform: aarch64-apple-darwin
             target: aarch64-apple-darwin
             os: macos-15
             deployment_target: '11.0'
+            test: true
 
     steps:
       - name: Checkout code
@@ -98,7 +99,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('LIBDATADOG_VERSION') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
@@ -118,12 +119,12 @@ jobs:
           MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment_target }}
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
-            # -FileVersion is this repo's release (e.g. 1.3.5), not LIBDATADOG_VERSION.
+            # -FileVersion is this repo's release (e.g. 1.3.5), not the libdatadog version.
             # Empty on PR builds; the Release workflow always sets it.
-            pwsh -Command "./build.ps1 -Platform '${{ matrix.platform }}' -Features '${{ inputs.features }}' -FileVersion '${{ inputs.file_version }}' -Clean"
+            pwsh -Command "./build.ps1 -Platform '${{ matrix.platform }}' -FileVersion '${{ inputs.file_version }}' -Clean"
           else
             chmod +x build.sh
-            ./build.sh --platform "${{ matrix.platform }}" --features "${{ inputs.features }}" --clean
+            ./build.sh --platform "${{ matrix.platform }}" --clean
           fi
         shell: bash
 
@@ -135,6 +136,12 @@ jobs:
       - name: Fix cargo cache ownership
         if: runner.os == 'Linux'
         run: sudo chown -R "$(id -u):$(id -g)" ~/.cargo
+        shell: bash
+
+      # Outside target/, which the Linux builds leave owned by root
+      - name: Test datadog-dotnet-ffi
+        if: matrix.test && inputs.verify_artifacts
+        run: cargo test -p datadog-dotnet-ffi --locked --target-dir "$RUNNER_TEMP/ffi-test"
         shell: bash
 
       - name: Verify build artifacts

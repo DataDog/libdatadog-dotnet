@@ -31,7 +31,7 @@ permissions:
 jobs:
   # Resolve the libdatadog-dotnet release tag before the build so Windows
   # DLLs can embed it as FileVersion. This is this repo's own tag (v1.3.5),
-  # not LIBDATADOG_VERSION — Windows Installer compares FileVersion when
+  # not the libdatadog version — Windows Installer compares FileVersion when
   # deciding whether to replace the DLL on upgrade.
   resolve-version:
     name: Resolve release version
@@ -99,7 +99,7 @@ jobs:
             exit 1
           fi
 
-          # major.minor.patch, no leading v — what `release --file-version` expects.
+          # major.minor.patch, no leading v — what `build.ps1 -FileVersion` expects.
           FILE_VERSION="${RELEASE_TAG#v}"
 
           echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_OUTPUT
@@ -115,7 +115,6 @@ jobs:
       contents: read
     with:
       verify_artifacts: false
-      features: 'profiling,crashtracker,symbolizer,library-config'
       file_version: ${{ needs.resolve-version.outputs.file_version }}
 
   create-release:
@@ -232,7 +231,7 @@ jobs:
           cat > release-notes.md << 'NOTES_EOF'
           ## Build Information
 
-          - **Libdatadog version**: see `LIBDATADOG_VERSION` in this repository
+          - **Libdatadog version**: see the libdatadog dependencies in `datadog-dotnet-ffi/Cargo.toml` in this repository
 
           ## Checksums
 
